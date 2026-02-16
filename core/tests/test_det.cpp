@@ -186,7 +186,7 @@ int main() {
 				op.target_row = 0;
 				op.source_row = 1;
 				assert(matrix_core::row_op_caption(op, buf, sizeof(buf)) == ErrorCode::Ok);
-				assert(std::strcmp(buf, "$R_{1} \\leftrightarrow R_{2}$") == 0);
+				assert(std::strcmp(buf, "$R_{1} <-> R_{2}$") == 0);
 
 				op.kind = matrix_core::RowOpKind::Scale;
 				op.target_row = 9; // R10 (two-digit)

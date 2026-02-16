@@ -19,7 +19,7 @@ ErrorCode row_op_caption(const RowOp& op, char* out, std::size_t cap) noexcept {
 				ec = w.append_index1(op.target_row);
 				if (!is_ok(ec))
 						return ec;
-				ec = w.append("} \\leftrightarrow R_{");
+				ec = w.append("} <-> R_{");
 				if (!is_ok(ec))
 						return ec;
 				ec = w.append_index1(op.source_row);

@@ -45,6 +45,22 @@ static_assert(kPersistBytes + kScratchBytes == kSlabBytes);
 
 constexpr std::size_t kTeXRendererBytes = 20u * 1024u;
 
+void print_single_line_clipped(const char* text, int max_width_px) noexcept {
+		if (!text || max_width_px <= 0)
+				return;
+		int used_px = 0;
+		for (const char* p = text; *p != '\0'; ++p) {
+				const char c = *p;
+				if (c == '\n' || c == '\r')
+						break;
+				const int char_w = static_cast<int>(gfx_GetCharWidth(c));
+				if (used_px + char_w > max_width_px)
+						break;
+				gfx_PrintChar(c);
+				used_px += char_w;
+		}
+}
+
 } // namespace
 
 bool App::init() noexcept {
@@ -294,8 +310,7 @@ void App::render_footer_hint(const char* hint) noexcept {
 
 		gfx_SetTextFGColor(ui::color::kBlack);
 		gfx_SetTextXY(l.margin_x, y + 6);
-		if (hint)
-				gfx_PrintString(hint);
+		print_single_line_clipped(hint, kScreenW - 2 * l.margin_x);
 }
 
 void App::render_message() noexcept {

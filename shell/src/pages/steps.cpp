@@ -26,6 +26,9 @@ using detail::kScreenH;
 using detail::kScreenW;
 
 static TeX_Config kTeXCfg{ui::color::kBlack, ui::color::kWhite, "TeXFonts", nullptr, nullptr};
+
+constexpr const char* kFooterStepsNoScroll = "L/R Step  2ND+L/R Ends  CLR Back";
+constexpr const char* kFooterStepsScroll = "L/R Step  2ND+L/R Ends  U/D Scroll  CLR Back";
 } // namespace
 
 void App::steps_tex_reset() noexcept {
@@ -158,7 +161,7 @@ void App::render_steps(const StepsState& s) noexcept {
 						gfx_SetTextFGColor(ui::color::kBlack);
 						gfx_SetTextXY(l.margin_x, content_y);
 						gfx_PrintString("Step render failed.");
-						render_footer_hint("LEFT/RIGHT: Step  2ND+LEFT/RIGHT: Ends  CLEAR: Back");
+						render_footer_hint(kFooterStepsNoScroll);
 						return;
 				}
 
@@ -175,7 +178,7 @@ void App::render_steps(const StepsState& s) noexcept {
 						SHELL_DBG("[tex] tex_format failed\n");
 						gfx_SetTextXY(l.margin_x, content_y);
 						gfx_PrintString("TeX format failed.");
-						render_footer_hint("LEFT/RIGHT: Step  2ND+LEFT/RIGHT: Ends  CLEAR: Back");
+						render_footer_hint(kFooterStepsNoScroll);
 						return;
 				}
 				tex_total_height_ = tex_get_total_height(tex_layout_);
@@ -187,7 +190,7 @@ void App::render_steps(const StepsState& s) noexcept {
 				gfx_SetTextFGColor(ui::color::kBlack);
 				gfx_SetTextXY(l.margin_x, content_y);
 				gfx_PrintString("Step render failed.");
-				render_footer_hint("LEFT/RIGHT: Step  2ND+LEFT/RIGHT: Ends  CLEAR: Back");
+				render_footer_hint(kFooterStepsNoScroll);
 				return;
 		}
 
@@ -206,7 +209,7 @@ void App::render_steps(const StepsState& s) noexcept {
 				tex_draw(tex_renderer_, tex_layout_, l.margin_x, content_y, tex_scroll_y_);
 		}
 
-		render_footer_hint("LEFT/RIGHT: Step  2ND+LEFT/RIGHT: Ends  UP/DOWN: Scroll  CLEAR: Back");
+		render_footer_hint(kFooterStepsScroll);
 }
 
 #if MATRIX_SHELL_ENABLE_CRAMER && MATRIX_CORE_ENABLE_CRAMER

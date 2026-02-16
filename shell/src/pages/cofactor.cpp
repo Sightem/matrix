@@ -25,7 +25,7 @@ void App::render_cofactor_element(const CofactorElementState& s) noexcept {
 		const ui::Layout l = ui::Layout{};
 
 		render_header("Cofactor (Element)");
-		render_footer_hint("UP/DOWN: Field  LEFT/RIGHT: Adjust  ENTER: Run  CLEAR: Back");
+		render_footer_hint("U/D Field  L/R Adjust  ENTER Run  CLR Back");
 
 		gfx_SetTextFGColor(ui::color::kBlack);
 		gfx_SetTextXY(l.margin_x, l.header_h + 10);

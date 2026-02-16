@@ -110,7 +110,7 @@ int main() {
 				// Should swap to get a pivot in column 1.
 				assert(expl2.step_count() >= 2);
 				assert(expl2.render_step(1, bufs) == ErrorCode::Ok);
-				assert(std::strstr(caption, "\\leftrightarrow") != nullptr);
+				assert(std::strstr(caption, "<->") != nullptr);
 
 				for (std::size_t i = 0; i < expl2.step_count(); i++)
 						assert(expl2.render_step(i, bufs) == ErrorCode::Ok);
