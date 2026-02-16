@@ -1,0 +1,95 @@
+name: Stable Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (example: v1.0)"
+        required: true
+        default: "v1.0"
+      ref:
+        description: "Branch or commit to release"
+        required: true
+        default: "master"
+
+permissions:
+  contents: write
+
+jobs:
+  stable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Install CEdev nightly toolchain (v17)
+        run: |
+          curl -L -o CEdev-Linux-nightly.tar.gz \
+            https://github.com/CE-Programming/toolchain/releases/download/nightly/CEdev-Linux-nightly.tar.gz
+          tar -xzf CEdev-Linux-nightly.tar.gz
+          test -x "${GITHUB_WORKSPACE}/CEdev/bin/ez80-clang"
+
+      - name: Build MATRIX.8xp
+        run: |
+          cmake --preset ce-release -DCEDEV_ROOT="${GITHUB_WORKSPACE}/CEdev"
+          cmake --build --preset ce-release
+
+      - name: Collect release assets
+        run: |
+          mkdir -p release-assets
+          cp build/ce/matrix_shell/bin/MATRIX.8xp "release-assets/MATRIX-${{ inputs.tag }}.8xp"
+          cp third_party/libtexce/assets/TeXFonts.8xv release-assets/
+          cp third_party/libtexce/assets/TeXScrpt.8xv release-assets/
+          ls -lh release-assets
+
+      - name: Create tag if needed
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          TARGET_SHA="$(git rev-parse HEAD)"
+          REMOTE_SHA="$(git ls-remote --tags origin "refs/tags/${TAG}^{}" | awk '{print $1}')"
+          if [ -z "${REMOTE_SHA}" ]; then
+            REMOTE_SHA="$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}')"
+          fi
+
+          if [ -n "${REMOTE_SHA}" ] && [ "${REMOTE_SHA}" != "${TARGET_SHA}" ]; then
+            echo "Tag ${TAG} already exists on a different commit (${REMOTE_SHA})."
+            echo "Refusing to overwrite a stable tag."
+            exit 1
+          fi
+
+          if [ -z "${REMOTE_SHA}" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "${TAG}" -m "Release ${TAG}" "${TARGET_SHA}"
+            git push origin "refs/tags/${TAG}"
+          fi
+
+      - name: Publish stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          NOTES="Stable release ${TAG} built from ${GITHUB_SHA}"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" release-assets/* --clobber
+            gh release edit "${TAG}" \
+              --title "${TAG}" \
+              --notes "${NOTES}" \
+              --latest
+          else
+            gh release create "${TAG}" release-assets/* \
+              --title "${TAG}" \
+              --notes "${NOTES}" \
+              --latest
+          fi

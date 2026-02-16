@@ -1,0 +1,69 @@
+name: Nightly Release
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Install CEdev nightly toolchain (v17)
+        run: |
+          curl -L -o CEdev-Linux-nightly.tar.gz \
+            https://github.com/CE-Programming/toolchain/releases/download/nightly/CEdev-Linux-nightly.tar.gz
+          tar -xzf CEdev-Linux-nightly.tar.gz
+          test -x "${GITHUB_WORKSPACE}/CEdev/bin/ez80-clang"
+
+      - name: Build MATRIX.8xp
+        run: |
+          cmake --preset ce-release -DCEDEV_ROOT="${GITHUB_WORKSPACE}/CEdev"
+          cmake --build --preset ce-release
+
+      - name: Collect release assets
+        run: |
+          mkdir -p release-assets
+          cp build/ce/matrix_shell/bin/MATRIX.8xp release-assets/
+          cp third_party/libtexce/assets/TeXFonts.8xv release-assets/
+          cp third_party/libtexce/assets/TeXScrpt.8xv release-assets/
+          ls -lh release-assets
+
+      - name: Move nightly tag to current commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f nightly
+          git push origin refs/tags/nightly --force
+
+      - name: Publish nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Automated nightly build from ${GITHUB_SHA}"
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release upload nightly release-assets/* --clobber
+            gh release edit nightly \
+              --title "matrix nightly" \
+              --notes "${NOTES}" \
+              --prerelease
+          else
+            gh release create nightly release-assets/* \
+              --title "matrix nightly" \
+              --notes "${NOTES}" \
+              --prerelease
+          fi
