@@ -1,0 +1,173 @@
+{
+  "version": 8,
+  "configurePresets": [
+    {
+      "name": "native",
+      "displayName": "Native (Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/native",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MATRIX_BUILD_CE": "OFF",
+        "MATRIX_ENABLE_TESTS": "ON",
+        "MATRIX_STRICT_WARNINGS": "ON"
+      }
+    },
+    {
+      "name": "native-asan",
+      "displayName": "Native (ASAN/LSAN)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/native-asan",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MATRIX_BUILD_CE": "OFF",
+        "MATRIX_ENABLE_TESTS": "ON",
+        "MATRIX_STRICT_WARNINGS": "OFF",
+        "CMAKE_C_FLAGS": "-fsanitize=address -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address"
+      }
+    },
+    {
+      "name": "native-ubsan",
+      "displayName": "Native (UBSAN)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/native-ubsan",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MATRIX_BUILD_CE": "OFF",
+        "MATRIX_ENABLE_TESTS": "ON",
+        "MATRIX_STRICT_WARNINGS": "OFF",
+        "CMAKE_C_FLAGS": "-fsanitize=undefined -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=undefined"
+      }
+    },
+    {
+      "name": "native-lsan",
+      "displayName": "Native (LSAN)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/native-lsan",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MATRIX_BUILD_CE": "OFF",
+        "MATRIX_ENABLE_TESTS": "ON",
+        "MATRIX_STRICT_WARNINGS": "OFF",
+        "CMAKE_C_FLAGS": "-fsanitize=leak -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=leak -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=leak"
+      }
+    },
+    {
+      "name": "native-coverage",
+      "displayName": "Native (Coverage)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/native-coverage",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MATRIX_BUILD_CE": "OFF",
+        "MATRIX_ENABLE_TESTS": "ON",
+        "MATRIX_STRICT_WARNINGS": "OFF",
+        "CMAKE_C_FLAGS": "-fprofile-instr-generate -fcoverage-mapping",
+        "CMAKE_CXX_FLAGS": "-fprofile-instr-generate -fcoverage-mapping",
+        "CMAKE_EXE_LINKER_FLAGS": "-fprofile-instr-generate"
+      }
+    },
+    {
+      "name": "ce",
+      "displayName": "TI-84 Plus CE (Release minimal)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ce",
+      "cacheVariables": {
+        "MATRIX_BUILD_CE": "ON",
+        "MATRIX_FEATURE_PROJECTION": "OFF",
+        "MATRIX_FEATURE_MINOR_MATRIX": "OFF",
+        "MATRIX_FEATURE_COFACTOR": "OFF",
+        "MATRIX_FEATURE_CRAMER": "OFF",
+        "MATRIX_SHELL_DEBUG": "OFF",
+        "CEDEV_DEBUG_CONSOLE": "OFF"
+      }
+    },
+    {
+      "name": "ce-release",
+      "displayName": "TI-84 Plus CE (Release minimal)",
+      "inherits": "ce"
+    },
+    {
+      "name": "ce-debug",
+      "displayName": "TI-84 Plus CE (Debug console)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ce-debug",
+      "cacheVariables": {
+        "MATRIX_BUILD_CE": "ON",
+        "MATRIX_FEATURE_PROJECTION": "OFF",
+        "MATRIX_FEATURE_MINOR_MATRIX": "OFF",
+        "MATRIX_FEATURE_COFACTOR": "OFF",
+        "MATRIX_FEATURE_CRAMER": "OFF",
+        "MATRIX_SHELL_DEBUG": "ON",
+        "CEDEV_DEBUG_CONSOLE": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "native",
+      "configurePreset": "native",
+      "cleanFirst": true
+    },
+    {
+      "name": "native-asan",
+      "configurePreset": "native-asan",
+      "cleanFirst": true
+    },
+    {
+      "name": "native-ubsan",
+      "configurePreset": "native-ubsan",
+      "cleanFirst": true
+    },
+    {
+      "name": "native-lsan",
+      "configurePreset": "native-lsan",
+      "cleanFirst": true
+    },
+    {
+      "name": "native-coverage",
+      "configurePreset": "native-coverage",
+      "cleanFirst": true
+    },
+    {
+      "name": "ce",
+      "configurePreset": "ce",
+      "cleanFirst": true
+    },
+    {
+      "name": "ce-release",
+      "configurePreset": "ce-release",
+      "cleanFirst": true
+    },
+    {
+      "name": "ce-debug",
+      "configurePreset": "ce-debug",
+      "cleanFirst": true
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "native",
+      "configurePreset": "native",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

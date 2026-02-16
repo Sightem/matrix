@@ -1,0 +1,3 @@
+[submodule "third_party/libtexce"]
+	path = third_party/libtexce
+	url = https://github.com/Sightem/libtexce
