@@ -1,5 +1,6 @@
 #include "matrix_shell/app.hpp"
 
+#include "matrix_shell/text.hpp"
 #include "matrix_shell/ui.hpp"
 
 #include "matrix_shell/detail/app_internal.hpp"
@@ -21,6 +22,7 @@ using detail::kKbGroupArrows;
 using detail::kScreenH;
 using detail::kScreenW;
 using detail::op_name;
+using namespace matrix_shell::text_literals;
 
 void render_pivot_cols(std::uint32_t mask, char* buf, std::size_t cap) noexcept {
 		if (!buf || cap == 0)
@@ -46,11 +48,11 @@ void App::render_result(const ResultState& s) noexcept {
 
 		render_header(nullptr);
 		gfx_PrintString(op_name(s.op));
-		gfx_PrintString(" Result");
+		gfx_PrintString("result.suffix"_tx);
 		if (s.has_steps)
-				render_footer_hint("2ND: Steps  CLEAR: Back");
+				render_footer_hint("footer.result_steps_back"_tx);
 		else
-				render_footer_hint("CLEAR: Back");
+				render_footer_hint("footer.clear_back"_tx);
 
 		gfx_SetTextFGColor(ui::color::kBlack);
 
@@ -58,29 +60,29 @@ void App::render_result(const ResultState& s) noexcept {
 				if (s.op == OperationId::SpanTest || s.op == OperationId::IndepTest) {
 						const int y0 = l.header_h + 26;
 						gfx_SetTextXY(l.margin_x, y0);
-						gfx_PrintString((s.op == OperationId::SpanTest) ? "Spans R^m:" : "Independent:");
-						gfx_PrintString((s.num != 0) ? " YES" : " NO");
+						gfx_PrintString((s.op == OperationId::SpanTest) ? "result.span_label"_tx : "result.indep_label"_tx);
+						gfx_PrintString((s.num != 0) ? "result.bool_yes"_tx : "result.bool_no"_tx);
 
 						gfx_SetTextXY(l.margin_x, y0 + 14);
-						gfx_PrintString("rank=");
+						gfx_PrintString("result.rank_eq"_tx);
 						fmt_buf_[0] = '\0';
 						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
 						w.append_u64(static_cast<std::uint64_t>(s.i));
 						gfx_PrintString(fmt_buf_);
 
-						gfx_PrintString("  m=");
+						gfx_PrintString("result.m_eq"_tx);
 						fmt_buf_[0] = '\0';
 						matrix_core::CheckedWriter w2{fmt_buf_, sizeof(fmt_buf_)};
 						w2.append_u64(static_cast<std::uint64_t>(s.rows));
 						gfx_PrintString(fmt_buf_);
-						gfx_PrintString("  n=");
+						gfx_PrintString("result.n_eq"_tx);
 						fmt_buf_[0] = '\0';
 						matrix_core::CheckedWriter w3{fmt_buf_, sizeof(fmt_buf_)};
 						w3.append_u64(static_cast<std::uint64_t>(s.cols));
 						gfx_PrintString(fmt_buf_);
 
 						gfx_SetTextXY(l.margin_x, y0 + 28);
-						gfx_PrintString("piv: ");
+						gfx_PrintString("result.piv_eq"_tx);
 						render_pivot_cols(static_cast<std::uint32_t>(s.den), fmt_buf_, sizeof(fmt_buf_));
 						gfx_PrintString(fmt_buf_);
 						return;
@@ -157,7 +159,7 @@ void App::render_result(const ResultState& s) noexcept {
 				// scalar result op not handled should not happen
 				SHELL_DBG("[result] unsupported scalar op=%s num=%lld den=%lld\n", op_name(s.op), (long long)s.num, (long long)s.den);
 				gfx_SetTextXY(l.margin_x, l.header_h + 30);
-				gfx_PrintString("Internal error: unsupported scalar op");
+				gfx_PrintString("result.internal_scalar_error"_tx);
 				return;
 		}
 
@@ -168,33 +170,33 @@ void App::render_result(const ResultState& s) noexcept {
 		if (s.op == OperationId::SolveRref || s.op == OperationId::ColSpaceBasis || s.op == OperationId::RowSpaceBasis ||
 		        s.op == OperationId::NullSpaceBasis || s.op == OperationId::LeftNullSpaceBasis) {
 				gfx_SetTextXY(l.margin_x, l.header_h + 4);
-				gfx_PrintString("rank=");
+				gfx_PrintString("result.rank_eq"_tx);
 				fmt_buf_[0] = '\0';
 				matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
 				w.append_u64(static_cast<std::uint64_t>(s.i));
 				gfx_PrintString(fmt_buf_);
 
-				gfx_PrintString(" null=");
+				gfx_PrintString("result.null_eq"_tx);
 				fmt_buf_[0] = '\0';
 				matrix_core::CheckedWriter w2{fmt_buf_, sizeof(fmt_buf_)};
 				w2.append_u64(static_cast<std::uint64_t>(s.j));
 				gfx_PrintString(fmt_buf_);
 
-				gfx_PrintString(" piv:");
+				gfx_PrintString("result.piv_compact_eq"_tx);
 				render_pivot_cols(static_cast<std::uint32_t>(s.num), fmt_buf_, sizeof(fmt_buf_));
 				gfx_PrintString(fmt_buf_);
 
 				gfx_SetTextXY(l.margin_x, l.header_h + 16);
 				if (s.op == OperationId::RowSpaceBasis) {
-						gfx_PrintString("Rows are basis vectors");
+						gfx_PrintString("result.rows_basis"_tx);
 				} else if (s.op == OperationId::SolveRref) {
 						if (s.cols == 1) {
-								gfx_PrintString("x is the solution vector");
+								gfx_PrintString("result.solution_vector"_tx);
 						} else {
-								gfx_PrintString("col1=x_p, cols2+=Null(A)");
+								gfx_PrintString("result.param_solution"_tx);
 						}
 				} else {
-						gfx_PrintString("Columns are basis vectors");
+						gfx_PrintString("result.cols_basis"_tx);
 				}
 				grid_top = l.header_h + 30;
 		}
@@ -265,11 +267,11 @@ void App::update_result(ResultState& s) noexcept {
 void App::render_projection_result(const ProjectionResultState& s) noexcept {
 		const ui::Layout l = ui::Layout{};
 
-		render_header("Projection");
+		render_header("result.projection_title"_tx);
 		if (s.has_steps)
-				render_footer_hint("LEFT/RIGHT: Toggle  2ND: Steps  CLEAR: Back");
+				render_footer_hint("footer.projection_steps_back"_tx);
 		else
-				render_footer_hint("LEFT/RIGHT: Toggle  CLEAR: Back");
+				render_footer_hint("footer.projection_back"_tx);
 
 		const bool show_proj = (s.mode == 0);
 		if (s.rows < 1 || s.cols < 1)
@@ -285,16 +287,16 @@ void App::render_projection_result(const ProjectionResultState& s) noexcept {
 
 		// info line
 		gfx_SetTextXY(l.margin_x, l.header_h + 4);
-		gfx_PrintString(show_proj ? "proj" : "orth");
-		gfx_PrintString(" (u=");
+		gfx_PrintString(show_proj ? "result.proj_label"_tx : "result.orth_label"_tx);
+		gfx_PrintString("result.proj_u_prefix"_tx);
 		gfx_PrintChar(static_cast<char>('A' + s.slot_u));
-		gfx_PrintString(", v=");
+		gfx_PrintString("result.proj_v_prefix"_tx);
 		gfx_PrintChar(static_cast<char>('A' + s.slot_v));
 		gfx_PrintString(")");
 
 		// k line
 		gfx_SetTextXY(l.margin_x, l.header_h + 18);
-		gfx_PrintString("k: ");
+		gfx_PrintString("result.k_label"_tx);
 		fmt_buf_[0] = '\0';
 		{
 				matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};

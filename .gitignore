@@ -17,3 +17,5 @@ build_warnings.txt
 *.lst
 
 *.su
+
+dist/

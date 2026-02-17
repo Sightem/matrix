@@ -1,5 +1,6 @@
 #include "matrix_shell/app.hpp"
 
+#include "matrix_shell/text.hpp"
 #include "matrix_shell/ui.hpp"
 
 #include "matrix_shell/detail/app_internal.hpp"
@@ -13,25 +14,26 @@ using detail::fail_fast;
 using detail::kKbGroup6;
 using detail::kKbGroupArrows;
 using detail::kScreenH;
+using namespace matrix_shell::text_literals;
 } // namespace
 
 void App::render_dim(const DimState& s) noexcept {
 		render_header(nullptr);
 		gfx_PrintChar(static_cast<char>('A' + s.slot));
-		gfx_PrintString(" Size");
-		render_footer_hint("ARROWS: Adjust  ENTER: OK  CLEAR: Back");
+		gfx_PrintString("dim.title_suffix"_tx);
+		render_footer_hint("footer.dim"_tx);
 
 		const ui::Layout l = ui::Layout{};
 		const int y = l.header_h + 40;
 
 		gfx_SetTextFGColor(ui::color::kBlack);
 		gfx_SetTextXY(l.margin_x, y);
-		gfx_PrintString("Rows:");
+		gfx_PrintString("dim.rows"_tx);
 		gfx_SetTextXY(l.margin_x + 60, y);
 		gfx_PrintChar(static_cast<char>('0' + s.rows));
 
 		gfx_SetTextXY(l.margin_x, y + 18);
-		gfx_PrintString("Cols:");
+		gfx_PrintString("dim.cols"_tx);
 		gfx_SetTextXY(l.margin_x + 60, y + 18);
 		gfx_PrintChar(static_cast<char>('0' + s.cols));
 }
@@ -68,7 +70,7 @@ void App::update_dim(DimState& s) noexcept {
 		const matrix_core::ErrorCode ec = ensure_slot_allocated(s.slot);
 		if (!matrix_core::is_ok(ec)) {
 				if (ec == matrix_core::ErrorCode::Overflow) {
-						show_message("Out of memory");
+						show_message("common.out_of_memory"_tx);
 						return;
 				}
 				fail_fast("ensure_slot_allocated: unexpected failure");

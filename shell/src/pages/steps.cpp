@@ -1,5 +1,6 @@
 #include "matrix_shell/app.hpp"
 
+#include "matrix_shell/text.hpp"
 #include "matrix_shell/ui.hpp"
 
 #include "matrix_shell/detail/app_internal.hpp"
@@ -24,11 +25,17 @@ using detail::kKbGroup6;
 using detail::kKbGroupArrows;
 using detail::kScreenH;
 using detail::kScreenW;
+using namespace matrix_shell::text_literals;
 
 static TeX_Config kTeXCfg{ui::color::kBlack, ui::color::kWhite, "TeXFonts", nullptr, nullptr};
 
-constexpr const char* kFooterStepsNoScroll = "L/R Step  2ND+L/R Ends  CLR Back";
-constexpr const char* kFooterStepsScroll = "L/R Step  2ND+L/R Ends  U/D Scroll  CLR Back";
+const char* footer_steps_no_scroll() noexcept {
+		return "footer.steps_no_scroll"_tx;
+}
+
+const char* footer_steps_scroll() noexcept {
+		return "footer.steps_scroll"_tx;
+}
 } // namespace
 
 void App::steps_tex_reset() noexcept {
@@ -53,8 +60,8 @@ void App::steps_tex_release() noexcept {
 void App::render_cramer_steps_menu(const CramerStepsMenuState& s) noexcept {
 		const ui::Layout l = ui::Layout{};
 
-		render_header("Cramer Steps");
-		render_footer_hint("ENTER: Select  CLEAR: Back");
+		render_header("steps.cramer_title"_tx);
+		render_footer_hint("footer.select_back"_tx);
 
 		const std::uint8_t count = static_cast<std::uint8_t>(s.n + 1u);
 
@@ -79,9 +86,9 @@ void App::render_cramer_steps_menu(const CramerStepsMenuState& s) noexcept {
 
 				gfx_SetTextXY(l.margin_x, y + 2);
 				if (idx == 0) {
-						gfx_PrintString("Delta = det(A)");
+						gfx_PrintString("steps.delta_det_a"_tx);
 				} else {
-						gfx_PrintString("Delta");
+						gfx_PrintString("steps.delta_label"_tx);
 						gfx_PrintChar('_');
 						fmt_buf_[0] = '\0';
 						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
@@ -93,22 +100,22 @@ void App::render_cramer_steps_menu(const CramerStepsMenuState& s) noexcept {
 #else
 void App::render_cramer_steps_menu(const CramerStepsMenuState&) noexcept {
 		const ui::Layout l = ui::Layout{};
-		render_header("Cramer Steps");
-		render_footer_hint("CLEAR: Back");
+		render_header("steps.cramer_title"_tx);
+		render_footer_hint("footer.clear_back"_tx);
 		gfx_SetTextFGColor(ui::color::kBlack);
 		gfx_SetTextXY(l.margin_x, l.header_h + 30);
-		gfx_PrintString("Disabled in this build.");
+		gfx_PrintString("common.disabled_build"_tx);
 }
 #endif
 
 void App::render_steps(const StepsState& s) noexcept {
 		const ui::Layout l = ui::Layout{};
-		render_header("Steps");
+		render_header("steps.title"_tx);
 
 		if (!expl_.available()) {
 				gfx_SetTextFGColor(ui::color::kBlack);
 				gfx_SetTextXY(l.margin_x, l.header_h + 30);
-				gfx_PrintString("No steps available.");
+				gfx_PrintString("steps.none_available"_tx);
 				return;
 		}
 
@@ -116,7 +123,7 @@ void App::render_steps(const StepsState& s) noexcept {
 		if (n == 0) {
 				gfx_SetTextFGColor(ui::color::kBlack);
 				gfx_SetTextXY(l.margin_x, l.header_h + 30);
-				gfx_PrintString("No steps.");
+				gfx_PrintString("steps.none"_tx);
 				return;
 		}
 
@@ -126,7 +133,7 @@ void App::render_steps(const StepsState& s) noexcept {
 
 		gfx_SetTextFGColor(ui::color::kBlack);
 		gfx_SetTextXY(l.margin_x, l.header_h + 4);
-		gfx_PrintString("Steps");
+		gfx_PrintString("steps.title"_tx);
 		gfx_PrintString(" ");
 		fmt_buf_[0] = '\0';
 		matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
@@ -160,8 +167,8 @@ void App::render_steps(const StepsState& s) noexcept {
 				if (!matrix_core::is_ok(tex_cached_step_ec_)) {
 						gfx_SetTextFGColor(ui::color::kBlack);
 						gfx_SetTextXY(l.margin_x, content_y);
-						gfx_PrintString("Step render failed.");
-						render_footer_hint(kFooterStepsNoScroll);
+						gfx_PrintString("steps.render_failed"_tx);
+						render_footer_hint(footer_steps_no_scroll());
 						return;
 				}
 
@@ -177,8 +184,8 @@ void App::render_steps(const StepsState& s) noexcept {
 				if (!tex_layout_) {
 						SHELL_DBG("[tex] tex_format failed\n");
 						gfx_SetTextXY(l.margin_x, content_y);
-						gfx_PrintString("TeX format failed.");
-						render_footer_hint(kFooterStepsNoScroll);
+						gfx_PrintString("steps.tex_failed"_tx);
+						render_footer_hint(footer_steps_no_scroll());
 						return;
 				}
 				tex_total_height_ = tex_get_total_height(tex_layout_);
@@ -189,8 +196,8 @@ void App::render_steps(const StepsState& s) noexcept {
 		if (!matrix_core::is_ok(tex_cached_step_ec_)) {
 				gfx_SetTextFGColor(ui::color::kBlack);
 				gfx_SetTextXY(l.margin_x, content_y);
-				gfx_PrintString("Step render failed.");
-				render_footer_hint(kFooterStepsNoScroll);
+				gfx_PrintString("steps.render_failed"_tx);
+				render_footer_hint(footer_steps_no_scroll());
 				return;
 		}
 
@@ -209,7 +216,7 @@ void App::render_steps(const StepsState& s) noexcept {
 				tex_draw(tex_renderer_, tex_layout_, l.margin_x, content_y, tex_scroll_y_);
 		}
 
-		render_footer_hint(kFooterStepsScroll);
+		render_footer_hint(footer_steps_scroll());
 }
 
 #if MATRIX_SHELL_ENABLE_CRAMER && MATRIX_CORE_ENABLE_CRAMER
@@ -281,7 +288,7 @@ void App::update_cramer_steps_menu(CramerStepsMenuState& s) noexcept {
 				        err.code == matrix_core::ErrorCode::Internal) {
 						fail_fast("update_cramer_steps_menu: unexpected error");
 				}
-				show_message("Error");
+				show_message("common.error"_tx);
 				return;
 		}
 

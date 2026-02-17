@@ -8,6 +8,8 @@ option(MATRIX_BUILD_CE "Build for TI-84 Plus CE via CEdevToolchain.cmake" OFF)
 option(MATRIX_ENABLE_TESTS "Build native tests" ON)
 option(MATRIX_STRICT_WARNINGS "Enable -Werror and extra warnings" ON)
 option(MATRIX_BUILD_CE_SHELL "Build the Matrix shell program when MATRIX_BUILD_CE=ON" ON)
+option(MATRIX_BUILD_CE_SHELL_EN "Build English Matrix shell when MATRIX_BUILD_CE_SHELL=ON" ON)
+option(MATRIX_BUILD_CE_SHELL_FR "Build French Matrix shell when MATRIX_BUILD_CE_SHELL=ON" OFF)
 option(MATRIX_BUILD_CE_TESTS "Build core unit tests as CE programs when MATRIX_BUILD_CE=ON" OFF)
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/matrix_features.cmake)
@@ -80,59 +82,87 @@ if(MATRIX_BUILD_CE)
   include(${CMAKE_CURRENT_LIST_DIR}/cmake/CEdevToolchain.cmake)
 
   if(MATRIX_BUILD_CE_SHELL)
-    cedev_add_program(
-      TARGET matrix_shell
-      NAME   "MATRIX"
-      DESCRIPTION "Matrix program (shell prototype)"
-      MODE auto
-
-      SOURCES
-        ${MATRIX_CORE_SOURCES}
-        ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_util.c
-        ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_pool.c
-        ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_symbols.c
-        ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_metrics.c
-        ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_fonts.c
-        ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_token.c
-        ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_parse.c
-        ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_measure.c
-        ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_layout.c
-        ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_renderer.c
-        ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_draw.c
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/app.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/app_internal.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/input.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/page.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/main_ce.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/cofactor.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/confirm.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/dim.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/editor.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/menu.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/result.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/slot_pick.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/steps.cpp
-
-      INCLUDE_DIRECTORIES
-        ${MATRIX_CORE_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/shell/include
-        ${MATRIX_LIBTEXCE_DIR}/src
-        ${MATRIX_LIBTEXCE_DIR}/src/tex
-        ${MATRIX_LIBTEXCE_DIR}/include
-
-      LIBLOAD
-        graphx
-        keypadc
-        fontlibc
-
-      COMPILE_OPTIONS
-        -DTEX_USE_FONTLIB
-        -DTEX_DIRECT_RENDER
-        -Wframe-larger-than=127
-        -Wno-error=frame-larger-than
-        -fstack-usage
-        ${MATRIX_FEATURE_COMPILE_OPTIONS}
+    set(MATRIX_SHELL_CE_SOURCES
+      ${MATRIX_CORE_SOURCES}
+      ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_util.c
+      ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_pool.c
+      ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_symbols.c
+      ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_metrics.c
+      ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_fonts.c
+      ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_token.c
+      ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_parse.c
+      ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_measure.c
+      ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_layout.c
+      ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_renderer.c
+      ${MATRIX_LIBTEXCE_DIR}/src/tex/tex_draw.c
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/app.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/app_internal.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/input.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/page.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/main_ce.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/text.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/cofactor.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/confirm.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/dim.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/editor.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/menu.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/result.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/slot_pick.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/shell/src/pages/steps.cpp
     )
+
+    set(MATRIX_SHELL_CE_INCLUDE_DIRS
+      ${MATRIX_CORE_DIR}/include
+      ${CMAKE_CURRENT_LIST_DIR}/shell/include
+      ${MATRIX_LIBTEXCE_DIR}/src
+      ${MATRIX_LIBTEXCE_DIR}/src/tex
+      ${MATRIX_LIBTEXCE_DIR}/include
+    )
+
+    set(MATRIX_SHELL_CE_COMPILE_OPTIONS
+      -DTEX_USE_FONTLIB
+      -DTEX_DIRECT_RENDER
+      -Wframe-larger-than=127
+      -Wno-error=frame-larger-than
+      -fstack-usage
+      ${MATRIX_FEATURE_COMPILE_OPTIONS}
+    )
+
+    function(matrix_add_ce_shell target_name program_name description_text lang_fr_value)
+      cedev_add_program(
+        TARGET ${target_name}
+        NAME ${program_name}
+        DESCRIPTION ${description_text}
+        MODE auto
+
+        SOURCES
+          ${MATRIX_SHELL_CE_SOURCES}
+
+        INCLUDE_DIRECTORIES
+          ${MATRIX_SHELL_CE_INCLUDE_DIRS}
+
+        LIBLOAD
+          graphx
+          keypadc
+          fontlibc
+
+        COMPILE_OPTIONS
+          ${MATRIX_SHELL_CE_COMPILE_OPTIONS}
+          -DMATRIX_SHELL_LANG_FR=${lang_fr_value}
+      )
+    endfunction()
+
+    if(MATRIX_BUILD_CE_SHELL_EN)
+      matrix_add_ce_shell(matrix_shell MATRIX "Matrix program (English)" 0)
+    endif()
+
+    if(MATRIX_BUILD_CE_SHELL_FR)
+      matrix_add_ce_shell(matrix_shell_fr MATRIXFR "Programme matrice (Francaise)" 1)
+    endif()
+
+    if(NOT MATRIX_BUILD_CE_SHELL_EN AND NOT MATRIX_BUILD_CE_SHELL_FR)
+      message(WARNING "MATRIX_BUILD_CE_SHELL=ON but both MATRIX_BUILD_CE_SHELL_EN and MATRIX_BUILD_CE_SHELL_FR are OFF; no shell binary will be produced.")
+    endif()
   endif()
 
   if(MATRIX_BUILD_CE_TESTS)

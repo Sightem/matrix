@@ -1,5 +1,6 @@
 #include "matrix_shell/app.hpp"
 
+#include "matrix_shell/text.hpp"
 #include "matrix_shell/ui.hpp"
 
 #include "matrix_shell/detail/app_internal.hpp"
@@ -23,6 +24,7 @@ using detail::kKbGroup6;
 using detail::kKbGroupArrows;
 using detail::kScreenH;
 using detail::kScreenW;
+using namespace matrix_shell::text_literals;
 } // namespace
 
 void App::render_editor(const EditorState& s) noexcept {
@@ -39,9 +41,9 @@ void App::render_editor(const EditorState& s) noexcept {
 		gfx_PrintChar(static_cast<char>('0' + slot.cols));
 
 		if (s.editing)
-				render_footer_hint("Digits  ENTER: OK  DEL: Back  CLEAR: Cancel");
+				render_footer_hint("footer.editor_input"_tx);
 		else
-				render_footer_hint("ARROWS: Move  ENTER: Edit  DEL: 0  CLEAR: Back");
+				render_footer_hint("footer.editor_nav"_tx);
 
 		const ui::Layout l = ui::Layout{};
 
@@ -93,7 +95,7 @@ void App::render_editor(const EditorState& s) noexcept {
 				gfx_FillRectangle(0, y, kScreenW, 18);
 				gfx_SetTextFGColor(ui::color::kWhite);
 				gfx_SetTextXY(l.margin_x, y + 4);
-				gfx_PrintString("Value: ");
+				gfx_PrintString("common.value_prefix"_tx);
 				gfx_PrintString(s.edit_buf);
 		}
 }
@@ -196,7 +198,7 @@ void App::update_editor(EditorState& s) noexcept {
 						return;
 				}
 				if (!parse_i64(s.edit_buf, &v)) {
-						show_message("Invalid integer");
+						show_message("msg.invalid_integer"_tx);
 						s.editing = false;
 						return;
 				}

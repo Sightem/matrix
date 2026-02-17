@@ -1,5 +1,6 @@
 #include "matrix_shell/app.hpp"
 
+#include "matrix_shell/text.hpp"
 #include "matrix_shell/ui.hpp"
 
 #include "matrix_shell/detail/app_internal.hpp"
@@ -11,11 +12,12 @@ namespace matrix_shell {
 namespace {
 using detail::fail_fast;
 using detail::kKbGroup6;
+using namespace matrix_shell::text_literals;
 } // namespace
 
 void App::render_confirm(const ConfirmState& s) noexcept {
-		render_header("Confirm");
-		render_footer_hint("ENTER: Yes  CLEAR: No");
+		render_header("common.confirm_title"_tx);
+		render_footer_hint("footer.yes_no"_tx);
 
 		if (s.slot >= kSlotCount)
 				fail_fast("render_confirm: slot out of range");
@@ -28,10 +30,10 @@ void App::render_confirm(const ConfirmState& s) noexcept {
 
 		switch (s.action) {
 		case ConfirmAction::Resize:
-				gfx_PrintString("Resize clears entries. Continue?");
+				gfx_PrintString("confirm.resize_prompt"_tx);
 				break;
 		case ConfirmAction::Clear:
-				gfx_PrintString("Clear slot. Continue?");
+				gfx_PrintString("confirm.clear_prompt"_tx);
 				break;
 		default:
 				fail_fast("render_confirm: unhandled ConfirmAction");
@@ -57,7 +59,7 @@ void App::update_confirm(ConfirmState& s) noexcept {
 		case ConfirmAction::Clear:
 				SHELL_DBG("[confirm] ENTER clear slot=%c\n", (char)('A' + s.slot));
 				clear_slot(s.slot);
-				show_message("Cleared");
+				show_message("common.cleared"_tx);
 				REQUIRE(pop(), "pop failed (clear)");
 				return;
 		case ConfirmAction::Resize:

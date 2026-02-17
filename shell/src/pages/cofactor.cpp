@@ -1,5 +1,6 @@
 #include "matrix_shell/app.hpp"
 
+#include "matrix_shell/text.hpp"
 #include "matrix_shell/ui.hpp"
 
 #include "matrix_shell/detail/app_internal.hpp"
@@ -18,18 +19,19 @@ using detail::fail_fast;
 using detail::kKbGroup6;
 using detail::kKbGroupArrows;
 using detail::kScreenW;
+using namespace matrix_shell::text_literals;
 } // namespace
 
 #if MATRIX_SHELL_ENABLE_COFACTOR && MATRIX_CORE_ENABLE_COFACTOR
 void App::render_cofactor_element(const CofactorElementState& s) noexcept {
 		const ui::Layout l = ui::Layout{};
 
-		render_header("Cofactor (Element)");
-		render_footer_hint("U/D Field  L/R Adjust  ENTER Run  CLR Back");
+		render_header("op.cofactor"_tx);
+		render_footer_hint("footer.cofactor_adjust"_tx);
 
 		gfx_SetTextFGColor(ui::color::kBlack);
 		gfx_SetTextXY(l.margin_x, l.header_h + 10);
-		gfx_PrintString("Matrix ");
+		gfx_PrintString("cofactor.matrix_prefix"_tx);
 		gfx_PrintChar(static_cast<char>('A' + s.slot));
 		gfx_PrintString(" (n=");
 		gfx_PrintChar(static_cast<char>('0' + s.n));
@@ -57,23 +59,23 @@ void App::render_cofactor_element(const CofactorElementState& s) noexcept {
 				matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
 				w.append_u64(static_cast<std::uint64_t>(s.i) + 1u);
 		}
-		draw_field(y_base + 0 * line_h, "Row i", fmt_buf_, s.focus == 0);
+		draw_field(y_base + 0 * line_h, "cofactor.row_i"_tx, fmt_buf_, s.focus == 0);
 
 		fmt_buf_[0] = '\0';
 		{
 				matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
 				w.append_u64(static_cast<std::uint64_t>(s.j) + 1u);
 		}
-		draw_field(y_base + 1 * line_h, "Col j", fmt_buf_, s.focus == 1);
+		draw_field(y_base + 1 * line_h, "cofactor.col_j"_tx, fmt_buf_, s.focus == 1);
 }
 #else
 void App::render_cofactor_element(const CofactorElementState& s) noexcept {
 		const ui::Layout l = ui::Layout{};
-		render_header("Cofactor (Element)");
-		render_footer_hint("CLEAR: Back");
+		render_header("op.cofactor"_tx);
+		render_footer_hint("footer.clear_back"_tx);
 		gfx_SetTextFGColor(ui::color::kBlack);
 		gfx_SetTextXY(l.margin_x, l.header_h + 30);
-		gfx_PrintString("Disabled in this build.");
+		gfx_PrintString("common.disabled_build"_tx);
 		(void)s;
 }
 #endif
@@ -140,7 +142,7 @@ void App::update_cofactor_element(CofactorElementState& s) noexcept {
 				        err.code == matrix_core::ErrorCode::Internal) {
 						fail_fast("update_cofactor_element: cofactor returned unexpected error");
 				}
-				show_message("Error");
+				show_message("common.error"_tx);
 				return;
 		}
 

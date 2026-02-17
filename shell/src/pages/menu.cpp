@@ -1,5 +1,6 @@
 #include "matrix_shell/app.hpp"
 
+#include "matrix_shell/text.hpp"
 #include "matrix_shell/ui.hpp"
 
 #include "matrix_shell/detail/app_internal.hpp"
@@ -18,6 +19,7 @@ using detail::kScreenH;
 using detail::kScreenW;
 using detail::op_enabled;
 using detail::op_name;
+using namespace matrix_shell::text_literals;
 
 template <typename T, std::size_t N> constexpr std::uint8_t array_count(const T (&)[N]) noexcept {
 		static_assert(N <= 32);
@@ -32,7 +34,7 @@ enum class MenuEntryKind : std::uint8_t {
 };
 
 struct MenuEntry {
-		const char* label = nullptr;
+		TextId label = TextId::None;
 		MenuEntryKind kind = MenuEntryKind::Submenu;
 		MenuId submenu = MenuId::Main;     // when kind==Submenu
 		OperationId op = OperationId::Add; // when kind==Operation
@@ -40,67 +42,67 @@ struct MenuEntry {
 
 struct OpMenuEntry {
 		OperationId op = OperationId::Add;
-		const char* label = nullptr; // optional override; otherwise uses `op_name(op)`
+		TextId label = TextId::None; // optional override; otherwise uses `op_name(op)`
 };
 
 constexpr MenuEntry kMainMenuEntries[] = {
-        {"Matrices", MenuEntryKind::Submenu, MenuId::Matrices, OperationId::Add},
-        {"Operations", MenuEntryKind::Submenu, MenuId::Operations, OperationId::Add},
+        {"menu.entry.matrices"_tid, MenuEntryKind::Submenu, MenuId::Matrices, OperationId::Add},
+        {"menu.entry.operations"_tid, MenuEntryKind::Submenu, MenuId::Operations, OperationId::Add},
 };
 
 constexpr MenuEntry kMatricesMenuEntries[] = {
-        {"Edit Slots", MenuEntryKind::Submenu, MenuId::SlotList, OperationId::Add},
+        {"menu.entry.edit_slots"_tid, MenuEntryKind::Submenu, MenuId::SlotList, OperationId::Add},
 };
 
 constexpr MenuEntry kOperationsMenuEntries[] = {
-        {"Add/Subtract", MenuEntryKind::Submenu, MenuId::AddSub, OperationId::Add},
-        {nullptr, MenuEntryKind::Operation, MenuId::Main, OperationId::Mul},
-        {nullptr, MenuEntryKind::Operation, MenuId::Main, OperationId::Dot},
-        {nullptr, MenuEntryKind::Operation, MenuId::Main, OperationId::Cross},
-        {nullptr, MenuEntryKind::Operation, MenuId::Main, OperationId::Det},
-        {"REF/RREF", MenuEntryKind::Submenu, MenuId::RefRref, OperationId::Add},
-        {nullptr, MenuEntryKind::Operation, MenuId::Main, OperationId::SolveRref},
-        {"Span/Independence", MenuEntryKind::Submenu, MenuId::Span, OperationId::Add},
-        {nullptr, MenuEntryKind::Operation, MenuId::Main, OperationId::Transpose},
-        {nullptr, MenuEntryKind::Operation, MenuId::Main, OperationId::Inverse},
-        {"Spaces", MenuEntryKind::Submenu, MenuId::Spaces, OperationId::Add},
-        {nullptr, MenuEntryKind::Operation, MenuId::Main, OperationId::Projection},
+        {"menu.entry.add_sub"_tid, MenuEntryKind::Submenu, MenuId::AddSub, OperationId::Add},
+        {TextId::None, MenuEntryKind::Operation, MenuId::Main, OperationId::Mul},
+        {TextId::None, MenuEntryKind::Operation, MenuId::Main, OperationId::Dot},
+        {TextId::None, MenuEntryKind::Operation, MenuId::Main, OperationId::Cross},
+        {TextId::None, MenuEntryKind::Operation, MenuId::Main, OperationId::Det},
+        {"menu.entry.ref_rref"_tid, MenuEntryKind::Submenu, MenuId::RefRref, OperationId::Add},
+        {TextId::None, MenuEntryKind::Operation, MenuId::Main, OperationId::SolveRref},
+        {"menu.entry.span_indep"_tid, MenuEntryKind::Submenu, MenuId::Span, OperationId::Add},
+        {TextId::None, MenuEntryKind::Operation, MenuId::Main, OperationId::Transpose},
+        {TextId::None, MenuEntryKind::Operation, MenuId::Main, OperationId::Inverse},
+        {"menu.entry.spaces"_tid, MenuEntryKind::Submenu, MenuId::Spaces, OperationId::Add},
+        {TextId::None, MenuEntryKind::Operation, MenuId::Main, OperationId::Projection},
 };
 
 constexpr OpMenuEntry kAddSubMenuOps[] = {
-        {OperationId::Add, nullptr},
-        {OperationId::Sub, nullptr},
+        {OperationId::Add, TextId::None},
+        {OperationId::Sub, TextId::None},
 };
 
 constexpr OpMenuEntry kRefRrefMenuOps[] = {
-        {OperationId::Ref, nullptr},
-        {OperationId::Rref, nullptr},
+        {OperationId::Ref, TextId::None},
+        {OperationId::Rref, TextId::None},
 };
 
 constexpr OpMenuEntry kSpanMenuOps[] = {
-        {OperationId::SolveRref, "In span? (solve)"},
-        {OperationId::SpanTest, nullptr},
-        {OperationId::IndepTest, nullptr},
-        {OperationId::ColSpaceBasis, "Basis from set"},
+        {OperationId::SolveRref, "menu.entry.in_span_solve"_tid},
+        {OperationId::SpanTest, TextId::None},
+        {OperationId::IndepTest, TextId::None},
+        {OperationId::ColSpaceBasis, "menu.entry.basis_from_set"_tid},
 };
 
 constexpr OpMenuEntry kSpacesMenuOps[] = {
-        {OperationId::ColSpaceBasis, nullptr},
-        {OperationId::RowSpaceBasis, nullptr},
-        {OperationId::NullSpaceBasis, nullptr},
-        {OperationId::LeftNullSpaceBasis, nullptr},
+        {OperationId::ColSpaceBasis, TextId::None},
+        {OperationId::RowSpaceBasis, TextId::None},
+        {OperationId::NullSpaceBasis, TextId::None},
+        {OperationId::LeftNullSpaceBasis, TextId::None},
 };
 
 const char* menu_entry_label(const MenuEntry& e) noexcept {
-		if (e.label)
-				return e.label;
+		if (e.label != TextId::None)
+				return tr(e.label);
 		if (e.kind == MenuEntryKind::Operation)
 				return op_name(e.op);
 		return "";
 }
 
 const char* op_menu_entry_label(const OpMenuEntry& e) noexcept {
-		return e.label ? e.label : op_name(e.op);
+		return (e.label != TextId::None) ? tr(e.label) : op_name(e.op);
 }
 
 std::uint8_t build_visible_menu(const MenuEntry* base, std::uint8_t base_count, const MenuEntry** out) noexcept {
@@ -133,51 +135,51 @@ std::uint8_t build_visible_op_menu(const OpMenuEntry* base, std::uint8_t base_co
 void App::render_menu(const MenuState& s) noexcept {
 		const ui::Layout l = ui::Layout{};
 
-		const char* title = "Menu";
+		const char* title = "menu.main.title"_tx;
 		const MenuEntry* base_entries = nullptr;
 		std::uint8_t base_count = 0;
 		const OpMenuEntry* base_ops = nullptr;
 		std::uint8_t base_ops_count = 0;
 
 		if (s.id == MenuId::Main) {
-				title = "Main";
+				title = "menu.main.title"_tx;
 				base_entries = kMainMenuEntries;
 				base_count = array_count(kMainMenuEntries);
-				render_footer_hint("ENTER: Select  CLEAR: Exit");
+				render_footer_hint("footer.select_exit"_tx);
 		} else if (s.id == MenuId::Matrices) {
-				title = "Matrices";
+				title = "menu.matrices.title"_tx;
 				base_entries = kMatricesMenuEntries;
 				base_count = array_count(kMatricesMenuEntries);
-				render_footer_hint("ENTER: Select  CLEAR: Back");
+				render_footer_hint("footer.select_back"_tx);
 		} else if (s.id == MenuId::SlotList) {
-				title = "Edit Matrix";
-				render_footer_hint("ENTER: Edit  2ND: Resize  DEL: Clear  CLEAR: Back");
+				title = "menu.edit_matrix.title"_tx;
+				render_footer_hint("footer.edit_slot_menu"_tx);
 		} else if (s.id == MenuId::Operations) {
-				title = "Operations";
+				title = "menu.operations.title"_tx;
 				base_entries = kOperationsMenuEntries;
 				base_count = array_count(kOperationsMenuEntries);
-				render_footer_hint("ENTER: Select  CLEAR: Back");
+				render_footer_hint("footer.select_back"_tx);
 		}
 		else if (s.id == MenuId::Span) {
-				title = "Span/Indep";
+				title = "menu.span.title"_tx;
 				base_ops = kSpanMenuOps;
 				base_ops_count = array_count(kSpanMenuOps);
-				render_footer_hint("ENTER: Select  CLEAR: Back");
+				render_footer_hint("footer.select_back"_tx);
 		} else if (s.id == MenuId::Spaces) {
-				title = "Spaces";
+				title = "menu.spaces.title"_tx;
 				base_ops = kSpacesMenuOps;
 				base_ops_count = array_count(kSpacesMenuOps);
-				render_footer_hint("ENTER: Select  CLEAR: Back");
+				render_footer_hint("footer.select_back"_tx);
 		} else if (s.id == MenuId::AddSub) {
-				title = "Add/Subtract";
+				title = "menu.add_sub.title"_tx;
 				base_ops = kAddSubMenuOps;
 				base_ops_count = array_count(kAddSubMenuOps);
-				render_footer_hint("ENTER: Select  CLEAR: Back");
+				render_footer_hint("footer.select_back"_tx);
 		} else if (s.id == MenuId::RefRref) {
-				title = "REF/RREF";
+				title = "menu.ref_rref.title"_tx;
 				base_ops = kRefRrefMenuOps;
 				base_ops_count = array_count(kRefRrefMenuOps);
-				render_footer_hint("ENTER: Select  CLEAR: Back");
+				render_footer_hint("footer.select_back"_tx);
 		}
 
 		render_header(title);
@@ -226,7 +228,7 @@ void App::render_menu(const MenuState& s) noexcept {
 
 						const Slot& slot = slots_[idx];
 						if (!slot.is_set()) {
-								gfx_PrintString("(unset)");
+								gfx_PrintString("common.unset"_tx);
 						} else {
 								gfx_PrintChar(static_cast<char>('0' + slot.rows));
 								gfx_PrintChar('x');
@@ -333,7 +335,7 @@ void App::update_menu(MenuState& s) noexcept {
 						if (sl.is_set())
 								REQUIRE(push(Page::make_confirm(slot, ConfirmAction::Clear)), "push confirm clear failed");
 						else
-								show_message("Slot is unset");
+								show_message("common.slot_unset"_tx);
 						return;
 				}
 

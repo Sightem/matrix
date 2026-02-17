@@ -30,15 +30,16 @@ jobs:
           tar -xzf CEdev-Linux-nightly.tar.gz
           test -x "${GITHUB_WORKSPACE}/CEdev/bin/ez80-clang"
 
-      - name: Build MATRIX.8xp
+      - name: Build MATRIX and MATRIXFR.8xp
         run: |
-          cmake --preset ce-release -DCEDEV_ROOT="${GITHUB_WORKSPACE}/CEdev"
-          cmake --build --preset ce-release
+          cmake --preset ce-release-dual-lang -DCEDEV_ROOT="${GITHUB_WORKSPACE}/CEdev"
+          cmake --build --preset ce-release-dual-lang
 
       - name: Collect release assets
         run: |
           mkdir -p release-assets
-          cp build/ce/matrix_shell/bin/MATRIX.8xp release-assets/
+          cp build/cdl/matrix_shell/bin/MATRIX.8xp release-assets/
+          cp build/cdl/matrix_shell_fr/bin/MATRIXFR.8xp release-assets/
           cp third_party/libtexce/assets/TeXFonts.8xv release-assets/
           cp third_party/libtexce/assets/TeXScrpt.8xv release-assets/
           ls -lh release-assets

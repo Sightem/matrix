@@ -93,7 +93,7 @@
         "MATRIX_FEATURE_PROJECTION": "OFF",
         "MATRIX_FEATURE_MINOR_MATRIX": "OFF",
         "MATRIX_FEATURE_COFACTOR": "OFF",
-        "MATRIX_FEATURE_CRAMER": "OFF",
+        "MATRIX_FEATURE_CRAMER": "ON",
         "MATRIX_SHELL_DEBUG": "OFF",
         "CEDEV_DEBUG_CONSOLE": "OFF"
       }
@@ -102,6 +102,40 @@
       "name": "ce-release",
       "displayName": "TI-84 Plus CE (Release minimal)",
       "inherits": "ce"
+    },
+    {
+      "name": "ce-release-fr",
+      "displayName": "TI-84 Plus CE (Release minimal, French)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ce-fr",
+      "cacheVariables": {
+        "MATRIX_BUILD_CE": "ON",
+        "MATRIX_FEATURE_PROJECTION": "OFF",
+        "MATRIX_FEATURE_MINOR_MATRIX": "OFF",
+        "MATRIX_FEATURE_COFACTOR": "OFF",
+        "MATRIX_FEATURE_CRAMER": "ON",
+        "MATRIX_SHELL_DEBUG": "OFF",
+        "MATRIX_BUILD_CE_SHELL_EN": "OFF",
+        "MATRIX_BUILD_CE_SHELL_FR": "ON",
+        "CEDEV_DEBUG_CONSOLE": "OFF"
+      }
+    },
+    {
+      "name": "ce-release-dual-lang",
+      "displayName": "TI-84 Plus CE (Release minimal, EN+FR)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/cdl",
+      "cacheVariables": {
+        "MATRIX_BUILD_CE": "ON",
+        "MATRIX_FEATURE_PROJECTION": "OFF",
+        "MATRIX_FEATURE_MINOR_MATRIX": "OFF",
+        "MATRIX_FEATURE_COFACTOR": "OFF",
+        "MATRIX_FEATURE_CRAMER": "ON",
+        "MATRIX_SHELL_DEBUG": "OFF",
+        "MATRIX_BUILD_CE_SHELL_EN": "ON",
+        "MATRIX_BUILD_CE_SHELL_FR": "ON",
+        "CEDEV_DEBUG_CONSOLE": "OFF"
+      }
     },
     {
       "name": "ce-debug",
@@ -113,8 +147,27 @@
         "MATRIX_FEATURE_PROJECTION": "OFF",
         "MATRIX_FEATURE_MINOR_MATRIX": "OFF",
         "MATRIX_FEATURE_COFACTOR": "OFF",
-        "MATRIX_FEATURE_CRAMER": "OFF",
+        "MATRIX_FEATURE_CRAMER": "ON",
         "MATRIX_SHELL_DEBUG": "ON",
+        "MATRIX_BUILD_CE_SHELL_EN": "ON",
+        "MATRIX_BUILD_CE_SHELL_FR": "OFF",
+        "CEDEV_DEBUG_CONSOLE": "ON"
+      }
+    },
+    {
+      "name": "ce-debug-fr",
+      "displayName": "TI-84 Plus CE (Debug console, French)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ce-debug-fr",
+      "cacheVariables": {
+        "MATRIX_BUILD_CE": "ON",
+        "MATRIX_FEATURE_PROJECTION": "OFF",
+        "MATRIX_FEATURE_MINOR_MATRIX": "OFF",
+        "MATRIX_FEATURE_COFACTOR": "OFF",
+        "MATRIX_FEATURE_CRAMER": "ON",
+        "MATRIX_SHELL_DEBUG": "ON",
+        "MATRIX_BUILD_CE_SHELL_EN": "OFF",
+        "MATRIX_BUILD_CE_SHELL_FR": "ON",
         "CEDEV_DEBUG_CONSOLE": "ON"
       }
     }
@@ -156,8 +209,23 @@
       "cleanFirst": true
     },
     {
+      "name": "ce-release-fr",
+      "configurePreset": "ce-release-fr",
+      "cleanFirst": true
+    },
+    {
+      "name": "ce-release-dual-lang",
+      "configurePreset": "ce-release-dual-lang",
+      "cleanFirst": true
+    },
+    {
       "name": "ce-debug",
       "configurePreset": "ce-debug",
+      "cleanFirst": true
+    },
+    {
+      "name": "ce-debug-fr",
+      "configurePreset": "ce-debug-fr",
       "cleanFirst": true
     }
   ],

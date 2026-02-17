@@ -1,5 +1,6 @@
 #include "matrix_shell/app.hpp"
 
+#include "matrix_shell/text.hpp"
 #include "matrix_shell/ui.hpp"
 
 #include "matrix_shell/detail/app_internal.hpp"
@@ -27,6 +28,7 @@ using detail::kScreenH;
 using detail::kScreenW;
 using detail::op_is_binary;
 using detail::op_name;
+using namespace matrix_shell::text_literals;
 } // namespace
 
 void App::render_slot_pick(const SlotPickState& s) noexcept {
@@ -36,11 +38,11 @@ void App::render_slot_pick(const SlotPickState& s) noexcept {
 		gfx_PrintString(op_name(s.op));
 		gfx_PrintString(": ");
 		if (op_is_binary(s.op))
-				gfx_PrintString((s.stage == 0) ? "Pick 1" : "Pick 2");
+				gfx_PrintString((s.stage == 0) ? "slot_pick.pick1"_tx : "slot_pick.pick2"_tx);
 		else
-				gfx_PrintString("Pick");
+				gfx_PrintString("slot_pick.pick"_tx);
 
-		render_footer_hint("ENTER: Select  CLEAR: Back");
+		render_footer_hint("footer.select_back"_tx);
 
 		const int list_top = l.header_h + l.margin_y;
 		const int line_h = 14;
@@ -69,7 +71,7 @@ void App::render_slot_pick(const SlotPickState& s) noexcept {
 
 				const Slot& slot = slots_[idx];
 				if (!slot.is_set()) {
-						gfx_PrintString("(unset)");
+						gfx_PrintString("common.unset"_tx);
 				} else {
 						gfx_PrintChar(static_cast<char>('0' + slot.rows));
 						gfx_PrintChar('x');
@@ -113,7 +115,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 		const std::uint8_t sel = s.cursor;
 		if (sel >= kSlotCount || !slots_[sel].is_set()) {
 				SHELL_DBG("[pick] ENTER sel=%c unset\n", (char)('A' + sel));
-				show_message("Slot is unset");
+				show_message("common.slot_unset"_tx);
 				return;
 		}
 
@@ -135,13 +137,13 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 
 #if !MATRIX_SHELL_ENABLE_MINOR_MATRIX
 				if (s.op == OperationId::MinorMatrix) {
-						show_message("Disabled in this build");
+						show_message("common.disabled_build_short"_tx);
 						return;
 				}
 #endif
 #if !MATRIX_SHELL_ENABLE_COFACTOR
 				if (s.op == OperationId::CofactorElement) {
-						show_message("Disabled in this build");
+						show_message("common.disabled_build_short"_tx);
 						return;
 				}
 #endif
@@ -151,7 +153,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						if (a.rows != a.cols) {
 								fmt_buf_[0] = '\0';
 								matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-								w.append("Requires square. ");
+								w.append("msg.requires_square_prefix"_tx);
 								w.put(static_cast<char>('A' + sel));
 								w.append("=");
 								w.append_u64(a.rows);
@@ -161,7 +163,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 								return;
 						}
 						if (a.rows <= 1) {
-								show_message("Need n>=2");
+								show_message("msg.need_n_ge_2"_tx);
 								return;
 						}
 
@@ -173,7 +175,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 								        (unsigned)ec,
 								        (unsigned)persist_.used(),
 								        (unsigned)persist_.capacity());
-								show_message("Out of memory");
+								show_message("common.out_of_memory"_tx);
 								return;
 						}
 
@@ -185,7 +187,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 								        err.code == matrix_core::ErrorCode::Internal) {
 										fail_fast("update_slot_pick: minor matrix returned unexpected error");
 								}
-								show_message("Error");
+								show_message("common.error"_tx);
 								return;
 						}
 
@@ -204,7 +206,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						if (a.rows != a.cols) {
 								fmt_buf_[0] = '\0';
 								matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-								w.append("Requires square. ");
+								w.append("msg.requires_square_prefix"_tx);
 								w.put(static_cast<char>('A' + sel));
 								w.append("=");
 								w.append_u64(a.rows);
@@ -228,7 +230,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 								        (unsigned)ec,
 								        (unsigned)persist_.used(),
 								        (unsigned)persist_.capacity());
-								show_message("Out of memory");
+								show_message("common.out_of_memory"_tx);
 								return;
 						}
 
@@ -241,7 +243,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						SHELL_DBG("[op] transpose err=%u a=%ux%u\n", (unsigned)err.code, (unsigned)err.a.rows, (unsigned)err.a.cols);
 						if (!matrix_core::is_ok(err)) {
 								if (err.code == matrix_core::ErrorCode::Overflow) {
-										show_message("Out of memory");
+										show_message("common.out_of_memory"_tx);
 										return;
 								}
 								fail_fast("update_slot_pick: transpose returned unexpected error");
@@ -274,7 +276,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 								if (err.code == matrix_core::ErrorCode::NotSquare) {
 										fmt_buf_[0] = '\0';
 										matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-										w.append("Det requires square. ");
+										w.append("msg.det_requires_square_prefix"_tx);
 										w.put(static_cast<char>('A' + sel));
 										w.append("=");
 										w.append_u64(a.rows);
@@ -282,7 +284,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 										w.append_u64(a.cols);
 										show_message(fmt_buf_);
 								} else
-										show_message("Error");
+										show_message("common.error"_tx);
 								return;
 						}
 
@@ -298,7 +300,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						if (a.rows != a.cols) {
 								fmt_buf_[0] = '\0';
 								matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-								w.append("Inverse requires square. ");
+								w.append("msg.inverse_requires_square_prefix"_tx);
 								w.put(static_cast<char>('A' + sel));
 								w.append("=");
 								w.append_u64(a.rows);
@@ -315,7 +317,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						matrix_core::MatrixMutView outm{};
 						const matrix_core::ErrorCode ec = matrix_core::matrix_alloc(persist_, n, n, &outm);
 						if (!matrix_core::is_ok(ec)) {
-								show_message("Out of memory");
+								show_message("common.out_of_memory"_tx);
 								return;
 						}
 
@@ -328,13 +330,13 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						SHELL_DBG("[op] inverse err=%u a=%ux%u\n", (unsigned)err.code, (unsigned)err.a.rows, (unsigned)err.a.cols);
 						if (!matrix_core::is_ok(err)) {
 								if (err.code == matrix_core::ErrorCode::Singular) {
-										show_message("Singular (no inverse)");
+										show_message("msg.singular_no_inverse"_tx);
 								} else if (err.code == matrix_core::ErrorCode::NotSquare ||
 								           err.code == matrix_core::ErrorCode::DimensionMismatch ||
 								           err.code == matrix_core::ErrorCode::Internal) {
 										fail_fast("update_slot_pick: inverse returned unexpected error");
 								} else {
-										show_message("Error");
+										show_message("common.error"_tx);
 								}
 								return;
 						}
@@ -360,20 +362,20 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						matrix_core::MatrixMutView rref{};
 						const matrix_core::ErrorCode ec_r = matrix_core::matrix_alloc(scratch_, a.rows, a.cols, &rref);
 						if (!matrix_core::is_ok(ec_r)) {
-								show_message("Out of memory");
+								show_message("common.out_of_memory"_tx);
 								return;
 						}
 
 						const matrix_core::Error err = matrix_core::op_echelon(a, matrix_core::EchelonKind::Rref, rref, &expl, opts_steps);
 						if (!matrix_core::is_ok(err)) {
-								show_message("Error");
+								show_message("common.error"_tx);
 								return;
 						}
 
 						matrix_core::SpaceInfo info{};
 						const matrix_core::ErrorCode ec_p = matrix_core::space_info_from_rref(rref.view(), a.cols, &info);
 						if (!matrix_core::is_ok(ec_p)) {
-								show_message("Error");
+								show_message("common.error"_tx);
 								return;
 						}
 						const std::uint32_t piv_mask = info.pivot_mask;
@@ -417,12 +419,12 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 								// Keep A^T alive for the step renderer.
 								const matrix_core::ErrorCode ec_t = matrix_core::matrix_alloc(persist_, a.cols, a.rows, &at_owned);
 								if (!matrix_core::is_ok(ec_t)) {
-										show_message("Out of memory");
+										show_message("common.out_of_memory"_tx);
 										return;
 								}
 								const matrix_core::ErrorCode ec_tt = matrix_core::matrix_transpose(a, at_owned);
 								if (!matrix_core::is_ok(ec_tt)) {
-										show_message("Error");
+										show_message("common.error"_tx);
 										return;
 								}
 								input = at_owned.view();
@@ -431,20 +433,20 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						matrix_core::MatrixMutView rref{};
 						const matrix_core::ErrorCode ec_r = matrix_core::matrix_alloc(scratch_, input.rows, input.cols, &rref);
 						if (!matrix_core::is_ok(ec_r)) {
-								show_message("Out of memory");
+								show_message("common.out_of_memory"_tx);
 								return;
 						}
 
 						const matrix_core::Error err = matrix_core::op_echelon(input, matrix_core::EchelonKind::Rref, rref, &expl, opts_steps);
 						if (!matrix_core::is_ok(err)) {
-								show_message("Error");
+								show_message("common.error"_tx);
 								return;
 						}
 
 						matrix_core::SpaceInfo info{};
 						const matrix_core::ErrorCode ec_info = matrix_core::space_info_from_rref(rref.view(), input.cols, &info);
 						if (!matrix_core::is_ok(ec_info)) {
-								show_message("Error");
+								show_message("common.error"_tx);
 								return;
 						}
 						const std::uint32_t piv_mask = info.pivot_mask;
@@ -454,13 +456,13 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						if (s.op == OperationId::ColSpaceBasis) {
 								const matrix_core::ErrorCode ec_o = matrix_core::space_col_basis(a, info, persist_, &out);
 								if (!matrix_core::is_ok(ec_o)) {
-										show_message("Out of memory");
+										show_message("common.out_of_memory"_tx);
 										return;
 								}
 						} else if (s.op == OperationId::RowSpaceBasis) {
 								const matrix_core::ErrorCode ec_o = matrix_core::space_row_basis(rref.view(), input.cols, info, persist_, &out);
 								if (!matrix_core::is_ok(ec_o)) {
-										show_message("Out of memory");
+										show_message("common.out_of_memory"_tx);
 										return;
 								}
 						} else {
@@ -468,7 +470,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 								const std::uint8_t var_cols = input.cols;
 								const matrix_core::ErrorCode ec_o = matrix_core::space_null_basis(rref.view(), var_cols, info, persist_, &out);
 								if (!matrix_core::is_ok(ec_o)) {
-										show_message("Out of memory");
+										show_message("common.out_of_memory"_tx);
 										return;
 								}
 						}
@@ -490,7 +492,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						matrix_core::MatrixMutView outm{};
 						const matrix_core::ErrorCode ec = matrix_core::matrix_alloc(persist_, a.rows, a.cols, &outm);
 						if (!matrix_core::is_ok(ec)) {
-								show_message("Out of memory");
+								show_message("common.out_of_memory"_tx);
 								return;
 						}
 
@@ -508,7 +510,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 								if (err.code == matrix_core::ErrorCode::DimensionMismatch || err.code == matrix_core::ErrorCode::Internal) {
 										fail_fast("update_slot_pick: echelon returned unexpected error");
 								}
-								show_message("Error");
+								show_message("common.error"_tx);
 								return;
 						}
 
@@ -561,11 +563,11 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 				SHELL_DBG("\n");
 				if (!matrix_core::is_ok(err)) {
 						if (err.code == matrix_core::ErrorCode::InvalidDimension)
-								show_message("Need vectors (n x 1 or 1 x n)");
+								show_message("msg.need_vectors"_tx);
 						else if (err.code == matrix_core::ErrorCode::DimensionMismatch) {
 								fmt_buf_[0] = '\0';
 								matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-								w.append("Need same length. ");
+								w.append("msg.need_same_length_prefix"_tx);
 								w.put(static_cast<char>('A' + a_slot));
 								w.append("=");
 								w.append_u64(a.rows);
@@ -581,7 +583,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						} else if (err.code == matrix_core::ErrorCode::Internal) {
 								fail_fast("update_slot_pick: dot returned Internal");
 						} else
-								show_message("Error");
+								show_message("common.error"_tx);
 						return;
 				}
 
@@ -602,7 +604,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						        (unsigned)ec,
 						        (unsigned)persist_.used(),
 						        (unsigned)persist_.capacity());
-						show_message("Out of memory");
+						show_message("common.out_of_memory"_tx);
 						return;
 				}
 
@@ -622,13 +624,13 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 				        (unsigned)out.cols);
 				if (!matrix_core::is_ok(err)) {
 						if (err.code == matrix_core::ErrorCode::InvalidDimension)
-								show_message("Need 3D vectors");
+								show_message("msg.need_3d_vectors"_tx);
 						else if (err.code == matrix_core::ErrorCode::DimensionMismatch)
 								fail_fast("update_slot_pick: cross returned DimensionMismatch");
 						else if (err.code == matrix_core::ErrorCode::Internal)
 								fail_fast("update_slot_pick: cross returned Internal");
 						else
-								show_message("Error");
+								show_message("common.error"_tx);
 						return;
 				}
 
@@ -643,24 +645,24 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 
 #if !MATRIX_SHELL_ENABLE_PROJECTION
 		if (s.op == OperationId::Projection) {
-				show_message("Disabled in this build");
+				show_message("common.disabled_build_short"_tx);
 				return;
 		}
 #endif
 #if !MATRIX_SHELL_ENABLE_CRAMER
 		if (s.op == OperationId::Cramer) {
-				show_message("Disabled in this build");
+				show_message("common.disabled_build_short"_tx);
 				return;
 		}
 #endif
 
 		if (s.op == OperationId::SolveRref) {
 				if (b.cols != 1 || b.rows != a.rows) {
-						show_message("Need B to be m x 1");
+						show_message("msg.need_b_mx1"_tx);
 						return;
 				}
 				if (a.cols + 1 > matrix_core::kMaxCols) {
-						show_message("Too many cols");
+						show_message("msg.too_many_cols"_tx);
 						return;
 				}
 
@@ -679,7 +681,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 				matrix_core::MatrixMutView aug{};
 				const matrix_core::ErrorCode ec_aug = matrix_core::matrix_alloc(persist_, m, static_cast<std::uint8_t>(n + 1u), &aug);
 				if (!matrix_core::is_ok(ec_aug)) {
-						show_message("Out of memory");
+						show_message("common.out_of_memory"_tx);
 						return;
 				}
 				for (std::uint8_t r = 0; r < m; r++) {
@@ -691,13 +693,13 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 				matrix_core::MatrixMutView rref_aug{};
 				const matrix_core::ErrorCode ec_rref = matrix_core::matrix_alloc(scratch_, m, static_cast<std::uint8_t>(n + 1u), &rref_aug);
 				if (!matrix_core::is_ok(ec_rref)) {
-						show_message("Out of memory");
+						show_message("common.out_of_memory"_tx);
 						return;
 				}
 
 				const matrix_core::Error err = matrix_core::op_echelon(aug.view(), matrix_core::EchelonKind::Rref, rref_aug, &expl, opts_steps);
 				if (!matrix_core::is_ok(err)) {
-						show_message("Error");
+						show_message("common.error"_tx);
 						return;
 				}
 
@@ -711,7 +713,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 								}
 						}
 						if (all_zero && !rref_aug.at(r, n).is_zero()) {
-								show_message("No solution");
+								show_message("msg.no_solution"_tx);
 								return;
 						}
 				}
@@ -719,7 +721,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 				matrix_core::SpaceInfo info{};
 				const matrix_core::ErrorCode ec_info = matrix_core::space_info_from_rref(rref_aug.view(), n, &info);
 				if (!matrix_core::is_ok(ec_info)) {
-						show_message("Error");
+						show_message("common.error"_tx);
 						return;
 				}
 				const std::uint32_t piv_mask = info.pivot_mask;
@@ -729,7 +731,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 				matrix_core::MatrixMutView xp{};
 				const matrix_core::ErrorCode ec_xp = matrix_core::matrix_alloc(persist_, n, 1, &xp);
 				if (!matrix_core::is_ok(ec_xp)) {
-						show_message("Out of memory");
+						show_message("common.out_of_memory"_tx);
 						return;
 				}
 				matrix_core::matrix_fill_zero(xp);
@@ -743,7 +745,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 				matrix_core::MatrixMutView n_basis{};
 				const matrix_core::ErrorCode ec_nb = matrix_core::space_null_basis(rref_aug.view(), n, info, persist_, &n_basis);
 				if (!matrix_core::is_ok(ec_nb)) {
-						show_message("Out of memory");
+						show_message("common.out_of_memory"_tx);
 						return;
 				}
 
@@ -757,7 +759,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						const std::uint8_t out_cols = static_cast<std::uint8_t>(n_basis.cols + 1u);
 						const matrix_core::ErrorCode ec_o = matrix_core::matrix_alloc(persist_, n, out_cols, &out);
 						if (!matrix_core::is_ok(ec_o)) {
-								show_message("Out of memory");
+								show_message("common.out_of_memory"_tx);
 								return;
 						}
 						for (std::uint8_t r = 0; r < n; r++) {
@@ -793,7 +795,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						        (unsigned)ec2,
 						        (unsigned)persist_.used(),
 						        (unsigned)persist_.capacity());
-						show_message("Out of memory");
+						show_message("common.out_of_memory"_tx);
 						return;
 				}
 
@@ -816,11 +818,11 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 
 				if (!matrix_core::is_ok(err)) {
 						if (err.code == matrix_core::ErrorCode::InvalidDimension)
-								show_message("Need vectors (n x 1 or 1 x n)");
+								show_message("msg.need_vectors"_tx);
 						else if (err.code == matrix_core::ErrorCode::DimensionMismatch) {
 								fmt_buf_[0] = '\0';
 								matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-								w.append("Need same length. ");
+								w.append("msg.need_same_length_prefix"_tx);
 								w.put(static_cast<char>('A' + a_slot));
 								w.append("=");
 								w.append_u64(a.rows);
@@ -834,11 +836,11 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 								w.append_u64(b.cols);
 								show_message(fmt_buf_);
 						} else if (err.code == matrix_core::ErrorCode::DivisionByZero) {
-								show_message("v is zero vector");
+								show_message("msg.v_zero_vector"_tx);
 						} else {
 								if (err.code == matrix_core::ErrorCode::Internal)
 										fail_fast("update_slot_pick: projection returned Internal");
-								show_message("Error");
+								show_message("common.error"_tx);
 						}
 						return;
 				}
@@ -868,7 +870,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 				if (a.rows != a.cols) {
 						fmt_buf_[0] = '\0';
 						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-						w.append("A must be square. ");
+						w.append("msg.a_must_be_square_prefix"_tx);
 						w.put(static_cast<char>('A' + a_slot));
 						w.append("=");
 						w.append_u64(a.rows);
@@ -880,11 +882,11 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 				if (b.rows != a.rows || b.cols != 1) {
 						fmt_buf_[0] = '\0';
 						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-						w.append("Need B to be n x 1. A is ");
+						w.append("msg.need_b_nx1_prefix"_tx);
 						w.append_u64(a.rows);
 						w.put('x');
 						w.append_u64(a.cols);
-						w.append(", B is ");
+						w.append("msg.b_is_prefix"_tx);
 						w.append_u64(b.rows);
 						w.put('x');
 						w.append_u64(b.cols);
@@ -900,7 +902,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						        (unsigned)ec,
 						        (unsigned)persist_.used(),
 						        (unsigned)persist_.capacity());
-						show_message("Out of memory");
+						show_message("common.out_of_memory"_tx);
 						return;
 				}
 
@@ -914,12 +916,12 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 				        (unsigned)err.b.cols);
 				if (!matrix_core::is_ok(err)) {
 						if (err.code == matrix_core::ErrorCode::Singular)
-								show_message("No unique solution (Delta=0)");
+								show_message("msg.no_unique_solution"_tx);
 						else if (err.code == matrix_core::ErrorCode::NotSquare || err.code == matrix_core::ErrorCode::DimensionMismatch ||
 						         err.code == matrix_core::ErrorCode::Internal)
 								fail_fast("update_slot_pick: cramer returned unexpected error");
 						else
-								show_message("Error");
+								show_message("common.error"_tx);
 						return;
 				}
 
@@ -954,7 +956,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 		const matrix_core::ErrorCode ec = matrix_core::matrix_alloc(persist_, out_dim.rows, out_dim.cols, &out);
 		if (!matrix_core::is_ok(ec)) {
 				SHELL_DBG("[op] alloc failed ec=%u used=%u/%u\n", (unsigned)ec, (unsigned)persist_.used(), (unsigned)persist_.capacity());
-				show_message("Out of memory");
+				show_message("common.out_of_memory"_tx);
 				return;
 		}
 		SHELL_DBG("[op] alloc ok out.data=%p stride=%u used=%u/%u\n",
@@ -987,9 +989,9 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 						fmt_buf_[0] = '\0';
 						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
 						if (s.op == OperationId::Mul)
-								w.append("Inner sizes must match. ");
+								w.append("msg.inner_sizes_match_prefix"_tx);
 						else
-								w.append("Need same size. ");
+								w.append("msg.need_same_size_prefix"_tx);
 						w.put(static_cast<char>('A' + a_slot));
 						w.append("=");
 						w.append_u64(a.rows);
@@ -1005,7 +1007,7 @@ void App::update_slot_pick(SlotPickState& s) noexcept {
 				} else if (err.code == matrix_core::ErrorCode::Internal || err.code == matrix_core::ErrorCode::InvalidDimension)
 						fail_fast("update_slot_pick: binary op returned unexpected error");
 				else
-						show_message("Error");
+						show_message("common.error"_tx);
 				return;
 		}
 

@@ -1,9 +1,12 @@
 #include "matrix_shell/detail/app_internal.hpp"
+#include "matrix_shell/text.hpp"
 
 #include <cassert>
 #include <cstdlib>
 
 namespace matrix_shell::detail {
+
+using namespace matrix_shell::text_literals;
 
 [[noreturn]] void fail_fast(const char* msg) noexcept {
 		assert(msg);
@@ -55,54 +58,53 @@ std::uint8_t keep_cursor_in_view(std::uint8_t cursor, std::uint8_t scroll, std::
 
 namespace {
 struct OpMeta {
-		const char* name = nullptr;
+		TextId name = TextId::None;
 		bool binary = false;
+		bool enabled = false;
 };
 
-// Note: name==nullptr implies the operation is disabled in this build.
-// Keep this table small and constexpr for the CE build.
 constexpr OpMeta kOpMeta[] = {
-        /* Add */ {"Add", true},
-        /* Sub */ {"Subtract", true},
-        /* Mul */ {"Multiply", true},
-        /* Dot */ {"Dot Product", true},
-        /* Cross */ {"Cross Product", true},
+        /* Add */ {"op.add"_tid, true, true},
+        /* Sub */ {"op.sub"_tid, true, true},
+        /* Mul */ {"op.mul"_tid, true, true},
+        /* Dot */ {"op.dot"_tid, true, true},
+        /* Cross */ {"op.cross"_tid, true, true},
         /* Projection */
 #if MATRIX_SHELL_ENABLE_PROJECTION && MATRIX_CORE_ENABLE_PROJECTION
-        {"Projection", true},
+        {"op.projection"_tid, true, true},
 #else
-        {nullptr, false},
+        {TextId::None, false, false},
 #endif
         /* Cramer */
 #if MATRIX_SHELL_ENABLE_CRAMER && MATRIX_CORE_ENABLE_CRAMER
-        {"Cramer", true},
+        {"op.cramer"_tid, true, true},
 #else
-        {nullptr, false},
+        {TextId::None, false, false},
 #endif
-        /* Det */ {"Determinant", false},
-        /* SolveRref */ {"Solve (RREF)", true},
-        /* SpanTest */ {"Spans R^m?", false},
-        /* IndepTest */ {"Linearly Independent?", false},
-        /* Transpose */ {"Transpose", false},
-        /* Inverse */ {"Inverse", false},
-        /* ColSpaceBasis */ {"Col(A) basis", false},
-        /* RowSpaceBasis */ {"Row(A) basis", false},
-        /* NullSpaceBasis */ {"Null(A) basis", false},
-        /* LeftNullSpaceBasis */ {"Left Null(A) basis", false},
+        /* Det */ {"op.det"_tid, false, true},
+        /* SolveRref */ {"op.solve_rref"_tid, true, true},
+        /* SpanTest */ {"op.span_test"_tid, false, true},
+        /* IndepTest */ {"op.indep_test"_tid, false, true},
+        /* Transpose */ {"op.transpose"_tid, false, true},
+        /* Inverse */ {"op.inverse"_tid, false, true},
+        /* ColSpaceBasis */ {"op.col_basis"_tid, false, true},
+        /* RowSpaceBasis */ {"op.row_basis"_tid, false, true},
+        /* NullSpaceBasis */ {"op.null_basis"_tid, false, true},
+        /* LeftNullSpaceBasis */ {"op.left_null_basis"_tid, false, true},
         /* MinorMatrix */
 #if MATRIX_SHELL_ENABLE_MINOR_MATRIX && MATRIX_CORE_ENABLE_MINOR_MATRIX
-        {"Minor Matrix", false},
+        {"op.minor_matrix"_tid, false, true},
 #else
-        {nullptr, false},
+        {TextId::None, false, false},
 #endif
         /* CofactorElement */
 #if MATRIX_SHELL_ENABLE_COFACTOR && MATRIX_CORE_ENABLE_COFACTOR
-        {"Cofactor", false},
+        {"op.cofactor"_tid, false, true},
 #else
-        {nullptr, false},
+        {TextId::None, false, false},
 #endif
-        /* Ref */ {"REF", false},
-        /* Rref */ {"RREF", false},
+        /* Ref */ {"op.ref"_tid, false, true},
+        /* Rref */ {"op.rref"_tid, false, true},
 };
 static_assert(sizeof(kOpMeta) / sizeof(kOpMeta[0]) == static_cast<std::size_t>(OperationId::Rref) + 1u, "Update kOpMeta");
 
@@ -119,12 +121,12 @@ bool op_is_binary(OperationId op) noexcept {
 }
 
 bool op_enabled(OperationId op) noexcept {
-		return op_meta(op).name != nullptr;
+		return op_meta(op).enabled;
 }
 
 const char* op_name(OperationId op) noexcept {
-		const char* name = op_meta(op).name;
-		return name ? name : "Disabled";
+		const OpMeta& meta = op_meta(op);
+		return meta.enabled ? tr(meta.name) : "common.disabled"_tx;
 }
 
 void dbg_print_i64(std::int64_t v) noexcept {
