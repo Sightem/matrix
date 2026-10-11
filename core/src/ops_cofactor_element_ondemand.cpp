@@ -1,29 +1,18 @@
 #include "matrix_core/ops.hpp"
 
 #if MATRIX_CORE_ENABLE_COFACTOR
+#include "matrix_core/det_detail.hpp"
 #include "matrix_core/latex.hpp"
 #include "matrix_core/row_ops.hpp"
 #include "matrix_core/writer.hpp"
 
-#include "matrix_core/det_detail.hpp"
-
-#include <new>
-
 namespace matrix_core {
 namespace {
-ErrorCode build_submatrix(MatrixView a, std::uint8_t del_r, std::uint8_t del_c, Arena& arena, MatrixMutView* out) noexcept {
-		if (a.rows != a.cols)
-				return ErrorCode::NotSquare;
-		if (a.rows <= 1)
-				return ErrorCode::InvalidDimension;
-		if (del_r >= a.rows || del_c >= a.cols)
-				return ErrorCode::IndexOutOfRange;
-
+ErrorCode build_submatrix(MatrixView a, std::uint8_t del_r, std::uint8_t del_c, MatrixMutView storage, MatrixMutView* out) noexcept {
 		MatrixMutView sub;
-		ErrorCode ec = matrix_alloc(arena, static_cast<std::uint8_t>(a.rows - 1), static_cast<std::uint8_t>(a.cols - 1), &sub);
+		ErrorCode ec = matrix_work_view(storage, static_cast<std::uint8_t>(a.rows - 1), static_cast<std::uint8_t>(a.cols - 1), &sub);
 		if (!is_ok(ec))
 				return ec;
-
 		std::uint8_t dest_row = 0;
 		for (std::uint8_t row = 0; row < a.rows; row++) {
 				if (row == del_r)
@@ -32,131 +21,57 @@ ErrorCode build_submatrix(MatrixView a, std::uint8_t del_r, std::uint8_t del_c, 
 				for (std::uint8_t col = 0; col < a.cols; col++) {
 						if (col == del_c)
 								continue;
-						sub.at_mut(dest_row, dest_col) = a.at(row, col);
-						dest_col++;
+						sub.at_mut(dest_row, dest_col++) = a.at(row, col);
 				}
 				dest_row++;
 		}
-
 		*out = sub;
 		return ErrorCode::Ok;
 }
 
-struct CofactorElementCtx {
-		MatrixView a;
-		std::uint8_t target_row = 0;
-		std::uint8_t target_col = 0;
-		Rational minor = Rational::from_int(0);
-		Rational cofactor = Rational::from_int(0);
-		std::size_t op_count = 0;
-};
-
-std::size_t cofactor_step_count(const void* vctx) noexcept {
-		const auto* ctx = static_cast<const CofactorElementCtx*>(vctx);
-		const std::uint8_t n = ctx->a.rows;
-
-		const std::size_t base = (n <= 1) ? 1 : 2;
-		return base + ctx->op_count + 1;
+ErrorCode write_cofactor_latex(const Explanation& e, char* out, std::size_t cap) noexcept {
+		Writer w{out, cap};
+		w.append("$$C_{");
+		w.append_index1(e.row);
+		w.append(",");
+		w.append_index1(e.col);
+		w.append("} = (-1)^{");
+		w.append_u64(static_cast<std::uint32_t>(e.row) + e.col + 2u);
+		w.append("} M_{");
+		w.append_index1(e.row);
+		w.append(",");
+		w.append_index1(e.col);
+		w.append("} = ");
+		w.append_rational_latex(e.value);
+		w.append("$$");
+		return w.status();
 }
+} // namespace
 
-ErrorCode write_cofactor_latex(const CofactorElementCtx& ctx, char* out, std::size_t cap) noexcept {
-		if (!out || cap == 0)
-				return ErrorCode::BufferTooSmall;
-
-		const std::uint32_t exp = static_cast<std::uint32_t>(ctx.target_row + 1u) + static_cast<std::uint32_t>(ctx.target_col + 1u);
-
-		Writer w{out, cap, 0};
-		ErrorCode ec = w.append("$$C_{");
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append_index1(ctx.target_row);
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append(",");
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append_index1(ctx.target_col);
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append("} = (-1)^{");
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append_u64(exp);
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append("} M_{");
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append_index1(ctx.target_row);
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append(",");
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append_index1(ctx.target_col);
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append("} = ");
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append_rational_latex(ctx.cofactor);
-		if (!is_ok(ec))
-				return ec;
-		return w.append("$$");
-}
-
-ErrorCode cofactor_render_step(const void* vctx, std::size_t index, const StepRenderBuffers& out) noexcept {
-		const auto* ctx = static_cast<const CofactorElementCtx*>(vctx);
-		if (!ctx->a.data)
-				return ErrorCode::Internal;
-		if (!out.scratch)
-				return ErrorCode::Internal;
-
-		if (out.caption && out.caption_cap)
-				out.caption[0] = '\0';
-		if (out.latex && out.latex_cap)
-				out.latex[0] = '\0';
-
-		const std::uint8_t n = ctx->a.rows;
-		const std::size_t base = (n <= 1) ? 1 : 2;
-		const std::size_t total = base + ctx->op_count + 1;
-		if (index >= total)
-				return ErrorCode::StepOutOfRange;
-
-		if (index == 0)
-				return latex::write_matrix_display(ctx->a, latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
-
-		if (n <= 1) {
-				return write_cofactor_latex(*ctx, out.latex, out.latex_cap);
-		}
-
+ErrorCode Explanation::render_cofactor(std::size_t index, const StepRenderBuffers& out) const noexcept {
 		MatrixMutView sub;
-		ErrorCode ec = build_submatrix(ctx->a, ctx->target_row, ctx->target_col, *out.scratch, &sub);
+		ErrorCode ec = matrix_work_view(out.work, static_cast<std::uint8_t>(input.rows - 1),
+		        static_cast<std::uint8_t>(input.cols - 1), &sub);
 		if (!is_ok(ec))
 				return ec;
-
+		if (index == 0)
+				return latex::write_matrix_display(input, latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
+		if (index == step_count() - 1)
+				return write_cofactor_latex(*this, out.latex, out.latex_cap);
+		ec = build_submatrix(input, row, col, out.work, &sub);
+		if (!is_ok(ec))
+				return ec;
 		if (index == 1) {
 				if (out.caption && out.caption_cap) {
-						Writer w{out.caption, out.caption_cap, 0};
-						ErrorCode ec2 = w.append("Delete row ");
-						if (!is_ok(ec2))
-								return ec2;
-						ec2 = w.append_index1(ctx->target_row);
-						if (!is_ok(ec2))
-								return ec2;
-						ec2 = w.append(", col ");
-						if (!is_ok(ec2))
-								return ec2;
-						ec2 = w.append_index1(ctx->target_col);
-						if (!is_ok(ec2))
-								return ec2;
+						Writer w{out.caption, out.caption_cap};
+						w.append("Delete row ");
+						w.append_index1(row);
+						w.append(", col ");
+						w.append_index1(col);
+						if (!is_ok(w.status()))
+								return w.status();
 				}
-
-				return latex::write_matrix_display(sub.view(), latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
-		}
-
-		if (index < 1 + ctx->op_count + 1) {
-				// index 2 -> after 1 op, index 3 -> after 2 ops, ...
+		} else {
 				const std::size_t stop_after = index - 1;
 				Rational ignored;
 				RowOp last{};
@@ -166,126 +81,58 @@ ErrorCode cofactor_render_step(const void* vctx, std::size_t index, const StepRe
 						return ec;
 				if (ops < stop_after)
 						return ErrorCode::StepOutOfRange;
-
 				if (out.caption) {
 						ec = row_op_caption(last, out.caption, out.caption_cap);
 						if (!is_ok(ec))
 								return ec;
 				}
-				return latex::write_matrix_display(sub.view(), latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
 		}
-
-		const std::size_t formula_index = index - (base + ctx->op_count);
-		(void)formula_index;
-		return write_cofactor_latex(*ctx, out.latex, out.latex_cap);
+		return latex::write_matrix_display(sub.view(), latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
 }
 
-constexpr ExplanationVTable kCofactorElementVTable = {
-        .step_count = &cofactor_step_count,
-        .render_step = &cofactor_render_step,
-        .destroy = nullptr,
-};
-
-} // namespace
-
-Error op_cofactor_element(MatrixView a,
-        std::uint8_t i,
-        std::uint8_t j,
-        Arena& scratch,
-        Rational* out,
-        Explanation* expl,
-        const ExplainOptions& opts) noexcept {
-		Error err;
+Error op_cofactor_element(MatrixView a, std::uint8_t i, std::uint8_t j, MatrixMutView storage,
+        Rational* out, Explanation* expl) noexcept {
+		if (expl)
+				*expl = {};
 		if (a.rows != a.cols)
 				return err_not_square(a.dim());
 		if (i >= a.rows || j >= a.cols) {
-				err.code = ErrorCode::IndexOutOfRange;
-				err.a = a.dim();
+				Error err{ErrorCode::IndexOutOfRange, a.dim()};
 				err.i = i;
 				err.j = j;
 				return err;
 		}
-		if (!out)
+		if (!out || !a.data)
 				return {ErrorCode::Internal};
-
-		ArenaScratchScope scratch_scope(scratch);
-
-		Rational minor = Rational::from_int(0);
+		if (a.stride < a.cols)
+				return err_invalid_dim(a.dim());
+		Rational minor = Rational::from_int(1);
 		std::size_t op_count = 0;
-
-		if (a.rows == 1) {
-				minor = Rational::from_int(1);
-				op_count = 0;
-		} else {
+		if (a.rows > 1) {
 				MatrixMutView sub;
-				ErrorCode ec = build_submatrix(a, i, j, scratch, &sub);
-				if (!is_ok(ec)) {
-						err.code = ec;
-						err.a = a.dim();
-						return err;
-				}
-
+				ErrorCode ec = build_submatrix(a, i, j, storage, &sub);
+				if (!is_ok(ec))
+						return {ec, a.dim()};
 				ec = detail::det_elim(sub, &minor, &op_count, static_cast<std::size_t>(-1), nullptr);
-				if (!is_ok(ec)) {
-						err.code = ec;
-						err.a = a.dim();
-						return err;
-				}
+				if (!is_ok(ec))
+						return {ec, a.dim()};
 		}
-
 		Rational cofactor = minor;
 		if (((i + j) & 1u) != 0u) {
 				ErrorCode ec = rational_neg(minor, &cofactor);
-				if (!is_ok(ec)) {
-						err.code = ec;
-						err.a = a.dim();
-						return err;
-				}
+				if (!is_ok(ec))
+						return {ec, a.dim()};
 		}
-
 		*out = cofactor;
-
-		if (opts.enable) {
-				if (!opts.persist || !expl)
-						return {ErrorCode::Internal};
-				ArenaScope tx(*opts.persist);
-				void* mem = opts.persist->allocate(sizeof(CofactorElementCtx), alignof(CofactorElementCtx));
-				if (!mem)
-						return err_overflow();
-				auto* ctx = new (mem) CofactorElementCtx{};
-				ctx->a = a;
-				ctx->target_row = i;
-				ctx->target_col = j;
-				ctx->minor = minor;
-				ctx->cofactor = cofactor;
-				ctx->op_count = op_count;
-				*expl = Explanation::make(ctx, &kCofactorElementVTable);
-				tx.commit();
+		if (expl) {
+				expl->kind = Explanation::Kind::Cofactor;
+				expl->input = a;
+				expl->row = i;
+				expl->col = j;
+				expl->value = cofactor;
+				expl->op_count = op_count;
 		}
-
-		return err;
-}
-
-} // namespace matrix_core
-#else
-
-namespace matrix_core {
-Error op_cofactor_element(MatrixView a,
-        std::uint8_t i,
-        std::uint8_t j,
-        Arena& scratch,
-        Rational* out,
-        Explanation* expl,
-        const ExplainOptions& opts) noexcept {
-		(void)a;
-		(void)i;
-		(void)j;
-		(void)scratch;
-		(void)out;
-		(void)expl;
-		(void)opts;
-		return err_feature_disabled();
+		return {};
 }
 } // namespace matrix_core
-
 #endif

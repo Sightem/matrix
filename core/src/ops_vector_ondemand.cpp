@@ -3,7 +3,6 @@
 #include "matrix_core/latex.hpp"
 #include "matrix_core/writer.hpp"
 
-#include <new>
 
 namespace matrix_core {
 namespace {
@@ -13,10 +12,10 @@ struct VecInfo {
 };
 
 ErrorCode vec_info(In const MatrixView& m, Out VecInfo* out) noexcept {
-		if (!out)
-				return ErrorCode::Internal;
 		if (!m.data)
 				return ErrorCode::Internal;
+		if (m.stride < m.cols)
+				return ErrorCode::InvalidDimension;
 
 		if (m.rows == 1 && m.cols >= 1) {
 				out->len = m.cols;
@@ -40,9 +39,6 @@ Rational& vec_at_mut(InOut MatrixMutView& m, In const VecInfo& vi, In std::uint8
 }
 
 ErrorCode dot_raw(In const MatrixView& u, In const VecInfo& ui, In const MatrixView& v, In const VecInfo& vi, Out Rational* out) noexcept {
-		if (!out)
-				return ErrorCode::Internal;
-
 		Rational sum = Rational::from_int(0);
 		for (std::uint8_t i = 0; i < ui.len; i++) {
 				Rational prod;
@@ -74,10 +70,8 @@ ErrorCode dot_of(In const MatrixView& u, In const MatrixView& v, Out Rational* o
 		if (ui.len > kMaxRows)
 				return ErrorCode::InvalidDimension;
 
-		if (ui_out)
-				*ui_out = ui;
-		if (vi_out)
-				*vi_out = vi;
+		*ui_out = ui;
+		*vi_out = vi;
 		return dot_raw(u, ui, v, vi, out);
 }
 
@@ -144,9 +138,6 @@ ErrorCode proj_decompose_raw_impl(In const MatrixView& u,
 		ec = dot_raw(v, vi, v, vi, &out.dot_vv);
 		if (!is_ok(ec))
 				return ec;
-		if (out.dot_vv.is_zero())
-				return ErrorCode::DivisionByZero;
-
 		ec = rational_div(out.dot_uv, out.dot_vv, &out.k);
 		if (!is_ok(ec))
 				return ec;
@@ -176,304 +167,122 @@ ErrorCode proj_decompose_raw_impl(In const MatrixView& u,
 		return dot_raw(out_orth.view(), ui, out_orth.view(), ui, &out.orth_norm2);
 }
 
-ErrorCode proj_decompose_raw(In const MatrixView& u,
-        In const VecInfo& ui,
-        In const MatrixView& v,
-        In const VecInfo& vi,
-        Out MatrixMutView& out_proj,
-        Out MatrixMutView& out_orth,
-        Out ProjDecomposeResult* out) noexcept {
-		if (out)
-				return proj_decompose_raw_impl(u, ui, v, vi, out_proj, out_orth, *out);
-
-		ProjDecomposeResult local;
-		return proj_decompose_raw_impl(u, ui, v, vi, out_proj, out_orth, local);
-}
 
 #endif // MATRIX_CORE_ENABLE_PROJECTION
 
-struct DotCtx {
-		MatrixView u;
-		MatrixView v;
-		VecInfo ui{};
-		VecInfo vi{};
-		Rational dot = Rational::from_int(0);
-};
+} // namespace
 
-std::size_t dot_step_count(const void*) noexcept {
-		// One compact computation step.
-		return 1;
-}
-
-ErrorCode dot_render_step(const void* vctx, std::size_t index, const StepRenderBuffers& out) noexcept {
-		const auto* ctx = static_cast<const DotCtx*>(vctx);
-		if (index != 0)
-				return ErrorCode::StepOutOfRange;
-
-		if (out.caption && out.caption_cap)
-				out.caption[0] = '\0';
-		if (out.latex && out.latex_cap)
-				out.latex[0] = '\0';
-
-		Writer w{out.latex, out.latex_cap, 0};
-		ErrorCode ec = w.append("$$u\\cdot v = ");
-		if (!is_ok(ec))
-				return ec;
-
-		for (std::uint8_t i = 0; i < ctx->ui.len; i++) {
-				if (i != 0) {
-						ec = w.append(" + ");
-						if (!is_ok(ec))
-								return ec;
-				}
-
-				ec = w.put('(');
-				if (!is_ok(ec))
-						return ec;
-				ec = w.append_rational_latex(vec_at(ctx->u, ctx->ui, i));
-				if (!is_ok(ec))
-						return ec;
-				ec = w.append(")\\cdot(");
-				if (!is_ok(ec))
-						return ec;
-				ec = w.append_rational_latex(vec_at(ctx->v, ctx->vi, i));
-				if (!is_ok(ec))
-						return ec;
-				ec = w.put(')');
-				if (!is_ok(ec))
-						return ec;
+ErrorCode Explanation::render_dot(std::size_t, const StepRenderBuffers& out) const noexcept {
+		const VecInfo ui{input.rows == 1 ? input.cols : input.rows, input.rows == 1};
+		const VecInfo vi{other.rows == 1 ? other.cols : other.rows, other.rows == 1};
+		Writer w{out.latex, out.latex_cap};
+		w.append("$$u\\cdot v = ");
+		for (std::uint8_t i = 0; i < ui.len; i++) {
+				if (i != 0)
+						w.append(" + ");
+				w.put('(');
+				w.append_rational_latex(vec_at(input, ui, i));
+				w.append(")\\cdot(");
+				w.append_rational_latex(vec_at(other, vi, i));
+				w.put(')');
 		}
-
-		ec = w.append(" = ");
-		if (!is_ok(ec))
-				return ec;
-		ec = w.append_rational_latex(ctx->dot);
-		if (!is_ok(ec))
-				return ec;
-		return w.append("$$");
+		w.append(" = ");
+		w.append_rational_latex(value);
+		w.append("$$");
+		return w.status();
 }
 
-constexpr ExplanationVTable kDotVTable = {
-        .step_count = &dot_step_count,
-        .render_step = &dot_render_step,
-        .destroy = nullptr,
-};
-
-struct CrossCtx {
-		MatrixView u;
-		MatrixView v;
-		VecInfo ui{};
-		VecInfo vi{};
-		VecInfo oi{};
-		MatrixView out_shape; // dimensions only (data ignored)
-};
-
-std::size_t cross_step_count(const void*) noexcept {
-		// 0: formula, 1: result vector
-		return 2;
-}
-
-ErrorCode cross_render_step(const void* vctx, std::size_t index, const StepRenderBuffers& out) noexcept {
-		const auto* ctx = static_cast<const CrossCtx*>(vctx);
-		if (index >= 2)
-				return ErrorCode::StepOutOfRange;
-		if (!out.scratch)
-				return ErrorCode::Internal;
-
-		if (out.caption && out.caption_cap)
-				out.caption[0] = '\0';
-		if (out.latex && out.latex_cap)
-				out.latex[0] = '\0';
-
-		if (index == 0) {
-				Writer w{out.latex, out.latex_cap, 0};
-				ErrorCode ec = w.append(
-				        "$$u\\times v = \\begin{bmatrix}u_2 v_3 - u_3 v_2 \\\\ u_3 v_1 - u_1 v_3 \\\\ u_1 v_2 - u_2 v_1\\end{bmatrix}$$");
-				return ec;
-		}
-
+ErrorCode Explanation::render_cross(std::size_t index, const StepRenderBuffers& out) const noexcept {
 		MatrixMutView tmp;
-		ErrorCode ec = matrix_alloc(*out.scratch, ctx->out_shape.rows, ctx->out_shape.cols, &tmp);
+		ErrorCode ec = matrix_work_view(out.work, result.rows, result.cols, &tmp);
 		if (!is_ok(ec))
 				return ec;
-
-		ec = cross_raw(ctx->u, ctx->ui, ctx->v, ctx->vi, tmp, ctx->oi);
-		if (!is_ok(ec))
-				return ec;
-
-		if (out.caption && out.caption_cap) {
-				Writer w{out.caption, out.caption_cap, 0};
-				ec = w.append("$u\\times v$");
-				if (!is_ok(ec))
-						return ec;
+		if (index == 0) {
+				Writer w{out.latex, out.latex_cap};
+				w.append("$$u\\times v = \\begin{bmatrix}u_2 v_3 - u_3 v_2 \\\\ u_3 v_1 - u_1 v_3 \\\\ u_1 v_2 - u_2 v_1\\end{bmatrix}$$");
+				return w.status();
 		}
-
+		const VecInfo ui{3, input.rows == 1};
+		const VecInfo vi{3, other.rows == 1};
+		ec = cross_raw(input, ui, other, vi, tmp, ui);
+		if (!is_ok(ec))
+				return ec;
+		if (out.caption && out.caption_cap) {
+				Writer w{out.caption, out.caption_cap};
+				w.append("$u\\times v$");
+				if (!is_ok(w.status()))
+						return w.status();
+		}
 		return latex::write_matrix_display(tmp.view(), latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
 }
 
-constexpr ExplanationVTable kCrossVTable = {
-        .step_count = &cross_step_count,
-        .render_step = &cross_render_step,
-        .destroy = nullptr,
-};
-
 #if MATRIX_CORE_ENABLE_PROJECTION
-struct ProjCtx {
-		MatrixView u;
-		MatrixView v;
-		VecInfo ui{};
-		VecInfo vi{};
-		MatrixView out_shape; // dimensions only (data ignored)
-		ProjDecomposeResult res{};
-};
-
-std::size_t proj_step_count(const void*) noexcept {
-		// formula, u . v, v . v, k, proj vec, orth vec, ||proj||^2, ||orth||^2
-		return 8;
+ErrorCode Explanation::render_proj(std::size_t index, const StepRenderBuffers& out) const noexcept {
+		MatrixMutView work;
+		ErrorCode ec = matrix_work_view(out.work, result.rows, result.cols, &work);
+		if (!is_ok(ec))
+				return ec;
+		if (index != 4 && index != 5) {
+				Writer w{out.latex, out.latex_cap};
+				switch (index) {
+				case 0:
+						w.append("$$proj_v(u) = \\frac{u\\cdot v}{v\\cdot v} v$$");
+						return w.status();
+				case 1:
+						w.append("$$u\\cdot v = ");
+						w.append_rational_latex(value);
+						break;
+				case 2:
+						w.append("$$v\\cdot v = ");
+						w.append_rational_latex(dot_vv);
+						break;
+				case 3:
+						w.append("$$k = \\frac{u\\cdot v}{v\\cdot v} = ");
+						w.append_rational_latex(k);
+						break;
+				case 6:
+						w.append("$$||proj||^2 = ");
+						w.append_rational_latex(proj_norm2);
+						break;
+				case 7:
+						w.append("$$||orth||^2 = ");
+						w.append_rational_latex(orth_norm2);
+						break;
+				default:
+						return ErrorCode::StepOutOfRange;
+				}
+				w.append("$$");
+				return w.status();
+		}
+		const VecInfo ui{input.rows == 1 ? input.cols : input.rows, input.rows == 1};
+		const VecInfo vi{other.rows == 1 ? other.cols : other.rows, other.rows == 1};
+		for (std::uint8_t i = 0; i < ui.len; i++) {
+				Rational term;
+				ec = rational_mul(k, vec_at(other, vi, i), &term);
+				if (!is_ok(ec))
+						return ec;
+				if (index == 5) {
+						Rational orth;
+						ec = rational_sub(vec_at(input, ui, i), term, &orth);
+						if (!is_ok(ec))
+								return ec;
+						term = orth;
+				}
+				vec_at_mut(work, ui, i) = term;
+		}
+		if (out.caption && out.caption_cap) {
+				Writer w{out.caption, out.caption_cap};
+				w.append(index == 4 ? "$proj = kv$" : "$orth = u - proj$");
+				if (!is_ok(w.status()))
+						return w.status();
+		}
+		return latex::write_matrix_display(work.view(), latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
 }
-
-ErrorCode proj_render_step(const void* vctx, std::size_t index, const StepRenderBuffers& out) noexcept {
-		const auto* ctx = static_cast<const ProjCtx*>(vctx);
-		if (index >= proj_step_count(nullptr))
-				return ErrorCode::StepOutOfRange;
-		if (!out.scratch)
-				return ErrorCode::Internal;
-
-		if (out.caption && out.caption_cap)
-				out.caption[0] = '\0';
-		if (out.latex && out.latex_cap)
-				out.latex[0] = '\0';
-
-		ErrorCode ec = ErrorCode::Ok;
-		Writer latex_w{out.latex, out.latex_cap, 0};
-
-		if (index == 0) {
-				return latex_w.append("$$proj_v(u) = \\frac{u\\cdot v}{v\\cdot v} v$$");
-		}
-
-		if (index == 1) {
-				ec = latex_w.append("$$u\\cdot v = ");
-				if (!is_ok(ec))
-						return ec;
-				ec = latex_w.append_rational_latex(ctx->res.dot_uv);
-				if (!is_ok(ec))
-						return ec;
-				return latex_w.append("$$");
-		}
-
-		if (index == 2) {
-				ec = latex_w.append("$$v\\cdot v = ");
-				if (!is_ok(ec))
-						return ec;
-				ec = latex_w.append_rational_latex(ctx->res.dot_vv);
-				if (!is_ok(ec))
-						return ec;
-				return latex_w.append("$$");
-		}
-
-		if (index == 3) {
-				ec = latex_w.append("$$k = \\frac{u\\cdot v}{v\\cdot v} = ");
-				if (!is_ok(ec))
-						return ec;
-				ec = latex_w.append_rational_latex(ctx->res.k);
-				if (!is_ok(ec))
-						return ec;
-				return latex_w.append("$$");
-		}
-
-		if (index == 6) {
-				ec = latex_w.append("$$||proj||^2 = ");
-				if (!is_ok(ec))
-						return ec;
-				ec = latex_w.append_rational_latex(ctx->res.proj_norm2);
-				if (!is_ok(ec))
-						return ec;
-				return latex_w.append("$$");
-		}
-
-		if (index == 7) {
-				ec = latex_w.append("$$||orth||^2 = ");
-				if (!is_ok(ec))
-						return ec;
-				ec = latex_w.append_rational_latex(ctx->res.orth_norm2);
-				if (!is_ok(ec))
-						return ec;
-				return latex_w.append("$$");
-		}
-
-		if (index == 4) {
-				MatrixMutView proj;
-				ec = matrix_alloc(*out.scratch, ctx->out_shape.rows, ctx->out_shape.cols, &proj);
-				if (!is_ok(ec))
-						return ec;
-
-				// proj = k * v
-				for (std::uint8_t i = 0; i < ctx->ui.len; i++) {
-						Rational term;
-						ec = rational_mul(ctx->res.k, vec_at(ctx->v, ctx->vi, i), &term);
-						if (!is_ok(ec))
-								return ec;
-						vec_at_mut(proj, ctx->ui, i) = term;
-				}
-
-				if (out.caption && out.caption_cap) {
-						Writer caption_w{out.caption, out.caption_cap, 0};
-						ec = caption_w.append("$proj = kv$");
-						if (!is_ok(ec))
-								return ec;
-				}
-				return latex::write_matrix_display(proj.view(), latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
-		}
-
-		if (index == 5) {
-				MatrixMutView orth;
-				ec = matrix_alloc(*out.scratch, ctx->out_shape.rows, ctx->out_shape.cols, &orth);
-				if (!is_ok(ec))
-						return ec;
-
-				// orth = u - proj = u - k*v
-				for (std::uint8_t i = 0; i < ctx->ui.len; i++) {
-						Rational kvi;
-						ec = rational_mul(ctx->res.k, vec_at(ctx->v, ctx->vi, i), &kvi);
-						if (!is_ok(ec))
-								return ec;
-						Rational term;
-						ec = rational_sub(vec_at(ctx->u, ctx->ui, i), kvi, &term);
-						if (!is_ok(ec))
-								return ec;
-						vec_at_mut(orth, ctx->ui, i) = term;
-				}
-
-				if (out.caption && out.caption_cap) {
-						Writer caption_w{out.caption, out.caption_cap, 0};
-						ec = caption_w.append("$orth = u - proj$");
-						if (!is_ok(ec))
-								return ec;
-				}
-				return latex::write_matrix_display(orth.view(), latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
-		}
-
-		return ErrorCode::Internal;
-}
-
-constexpr ExplanationVTable kProjVTable = {
-        .step_count = &proj_step_count,
-        .render_step = &proj_render_step,
-        .destroy = nullptr,
-};
 #endif
 
-template <typename Ctx> ErrorCode ctx_alloc(Arena& arena, Ctx** out) noexcept {
-		void* mem = arena.allocate(sizeof(Ctx), alignof(Ctx));
-		if (!mem)
-				return ErrorCode::Overflow;
-		*out = new (mem) Ctx{};
-		return ErrorCode::Ok;
-}
-
-} // namespace
-
-Error op_dot(In MatrixView u, In MatrixView v, Out Rational* out, Out Explanation* expl, In const ExplainOptions& opts) noexcept {
+Error op_dot(In MatrixView u, In MatrixView v, Out Rational* out, Out Explanation* expl) noexcept {
+		if (expl)
+				*expl = {};
 		Error err;
 		if (!out)
 				return {ErrorCode::Internal};
@@ -491,27 +300,19 @@ Error op_dot(In MatrixView u, In MatrixView v, Out Rational* out, Out Explanatio
 
 		*out = dot;
 
-		if (opts.enable) {
-				if (!opts.persist || !expl)
-						return {ErrorCode::Internal};
-				ArenaScope tx(*opts.persist);
-				DotCtx* ctx = nullptr;
-				ec = ctx_alloc(*opts.persist, &ctx);
-				if (!is_ok(ec))
-						return {ec};
-				ctx->u = u;
-				ctx->v = v;
-				ctx->ui = ui;
-				ctx->vi = vi;
-				ctx->dot = dot;
-				*expl = Explanation::make(ctx, &kDotVTable);
-				tx.commit();
+		if (expl) {
+				expl->kind = Explanation::Kind::Dot;
+				expl->input = u;
+				expl->other = v;
+				expl->value = dot;
 		}
 
 		return err;
 }
 
-Error op_cross(In MatrixView u, In MatrixView v, Out MatrixMutView out, Out Explanation* expl, In const ExplainOptions& opts) noexcept {
+Error op_cross(In MatrixView u, In MatrixView v, Out MatrixMutView out, Out Explanation* expl) noexcept {
+		if (expl)
+				*expl = {};
 		Error err;
 		VecInfo ui;
 		ErrorCode ec = vec_info(u, &ui);
@@ -535,28 +336,21 @@ Error op_cross(In MatrixView u, In MatrixView v, Out MatrixMutView out, Out Expl
 		}
 		if (u.dim().rows != out.dim().rows || u.dim().cols != out.dim().cols)
 				return {ErrorCode::DimensionMismatch, u.dim(), out.dim()};
+		if (!out.data)
+				return {ErrorCode::Internal};
+		if (out.stride < out.cols)
+				return err_invalid_dim(out.dim());
 
 		VecInfo oi = ui; // output orientation matches u
 		ec = cross_raw(u, ui, v, vi, out, oi);
 		if (!is_ok(ec))
 				return {ec};
 
-		if (opts.enable) {
-				if (!opts.persist || !expl)
-						return {ErrorCode::Internal};
-				ArenaScope tx(*opts.persist);
-				CrossCtx* ctx = nullptr;
-				ec = ctx_alloc(*opts.persist, &ctx);
-				if (!is_ok(ec))
-						return {ec};
-				ctx->u = u;
-				ctx->v = v;
-				ctx->ui = ui;
-				ctx->vi = vi;
-				ctx->oi = oi;
-				ctx->out_shape = out.view();
-				*expl = Explanation::make(ctx, &kCrossVTable);
-				tx.commit();
+		if (expl) {
+				expl->kind = Explanation::Kind::Cross;
+				expl->input = u;
+				expl->other = v;
+				expl->result = out.view();
 		}
 
 		return err;
@@ -568,8 +362,9 @@ Error op_proj_decompose_u_onto_v(In MatrixView u,
         Out MatrixMutView out_proj,
         Out MatrixMutView out_orth,
         Out ProjDecomposeResult* out,
-        Out Explanation* expl,
-        In const ExplainOptions& opts) noexcept {
+        Out Explanation* expl) noexcept {
+		if (expl)
+				*expl = {};
 		Error err;
 		VecInfo ui;
 		ErrorCode ec = vec_info(u, &ui);
@@ -587,46 +382,38 @@ Error op_proj_decompose_u_onto_v(In MatrixView u,
 		}
 		if (ui.len != vi.len)
 				return err_dim_mismatch(u.dim(), v.dim());
+		if (ui.len > kMaxRows)
+				return err_invalid_dim(u.dim());
 		if (u.dim().rows != out_proj.dim().rows || u.dim().cols != out_proj.dim().cols)
 				return err_dim_mismatch(u.dim(), out_proj.dim());
 		if (u.dim().rows != out_orth.dim().rows || u.dim().cols != out_orth.dim().cols)
 				return err_dim_mismatch(u.dim(), out_orth.dim());
 
-		if (opts.enable) {
-				if (!opts.persist || !expl)
-						return {ErrorCode::Internal};
-				ArenaScope tx(*opts.persist);
-				ProjCtx* ctx = nullptr;
-				ec = ctx_alloc(*opts.persist, &ctx);
-				if (!is_ok(ec))
-						return {ec};
-				ctx->u = u;
-				ctx->v = v;
-				ctx->ui = ui;
-				ctx->vi = vi;
-				ctx->out_shape = out_proj.view();
+		if (!out_proj.data || !out_orth.data)
+				return {ErrorCode::Internal};
+		if (out_proj.stride < out_proj.cols || out_orth.stride < out_orth.cols)
+				return err_invalid_dim(out_proj.dim());
 
-				ec = proj_decompose_raw(u, ui, v, vi, out_proj, out_orth, &ctx->res);
-				if (!is_ok(ec)) {
-						err.code = ec;
-						err.a = u.dim();
-						err.b = v.dim();
-						return err;
-				}
-				if (out)
-						*out = ctx->res;
-
-				*expl = Explanation::make(ctx, &kProjVTable);
-				tx.commit();
-				return err;
-		}
-
-		ec = proj_decompose_raw(u, ui, v, vi, out_proj, out_orth, out);
+		ProjDecomposeResult res;
+		ec = proj_decompose_raw_impl(u, ui, v, vi, out_proj, out_orth, res);
 		if (!is_ok(ec)) {
 				err.code = ec;
 				err.a = u.dim();
 				err.b = v.dim();
 				return err;
+		}
+		if (out)
+				*out = res;
+		if (expl) {
+				expl->kind = Explanation::Kind::Projection;
+				expl->input = u;
+				expl->other = v;
+				expl->result = out_proj.view();
+				expl->value = res.dot_uv;
+				expl->dot_vv = res.dot_vv;
+				expl->k = res.k;
+				expl->proj_norm2 = res.proj_norm2;
+				expl->orth_norm2 = res.orth_norm2;
 		}
 
 		return err;
@@ -637,15 +424,14 @@ Error op_proj_decompose_u_onto_v(In MatrixView u,
         Out MatrixMutView out_proj,
         Out MatrixMutView out_orth,
         Out ProjDecomposeResult* out,
-        Out Explanation* expl,
-        In const ExplainOptions& opts) noexcept {
+        Out Explanation* expl) noexcept {
+		if (expl)
+				*expl = {};
 		(void)u;
 		(void)v;
 		(void)out_proj;
 		(void)out_orth;
 		(void)out;
-		(void)expl;
-		(void)opts;
 		return err_feature_disabled();
 }
 #endif

@@ -1,83 +1,44 @@
 #include "matrix_core/ops.hpp"
 
 #if MATRIX_CORE_ENABLE_CRAMER
+#include "matrix_core/det_detail.hpp"
 #include "matrix_core/latex.hpp"
 #include "matrix_core/row_ops.hpp"
 #include "matrix_core/writer.hpp"
 
-#include "matrix_core/det_detail.hpp"
-
-#include <new>
-
 namespace matrix_core {
 namespace {
-struct DetReplaceColCtx {
-		MatrixView a;
-		MatrixView b;
-		std::uint8_t col = 0;
-		Rational det = Rational::from_int(0);
-		std::size_t op_count = 0;
-};
-
-std::size_t det_replace_step_count(const void* vctx) noexcept {
-		const auto* ctx = static_cast<const DetReplaceColCtx*>(vctx);
-		return ctx->op_count + 2;
-}
-
-ErrorCode build_matrix(MatrixView a, MatrixView b, std::uint8_t col, Arena& arena, MatrixMutView* out) noexcept {
+ErrorCode build_matrix(MatrixView a, MatrixView b, std::uint8_t col, MatrixMutView storage, MatrixMutView* out) noexcept {
 		MatrixMutView work;
-		ErrorCode ec = matrix_clone(arena, a, &work);
+		ErrorCode ec = matrix_work_view(storage, a.rows, a.cols, &work);
 		if (!is_ok(ec))
 				return ec;
-
+		ec = matrix_copy(a, work);
+		if (!is_ok(ec))
+				return ec;
 		for (std::uint8_t row = 0; row < a.rows; row++)
 				work.at_mut(row, col) = b.at(row, 0);
-
 		*out = work;
 		return ErrorCode::Ok;
 }
+} // namespace
 
-ErrorCode det_replace_render_step(const void* vctx, std::size_t index, const StepRenderBuffers& out) noexcept {
-		const auto* ctx = static_cast<const DetReplaceColCtx*>(vctx);
-		if (!ctx->a.data || !ctx->b.data)
-				return ErrorCode::Internal;
-		if (!out.scratch)
-				return ErrorCode::Internal;
-
-		if (out.caption && out.caption_cap)
-				out.caption[0] = '\0';
-		if (out.latex && out.latex_cap)
-				out.latex[0] = '\0';
-
-		const std::size_t total = ctx->op_count + 2;
-		if (index >= total)
-				return ErrorCode::StepOutOfRange;
-
+ErrorCode Explanation::render_det_replace(std::size_t index, const StepRenderBuffers& out) const noexcept {
 		MatrixMutView work;
-		ErrorCode ec = build_matrix(ctx->a, ctx->b, ctx->col, *out.scratch, &work);
+		ErrorCode ec = build_matrix(input, other, col, out.work, &work);
 		if (!is_ok(ec))
 				return ec;
-
 		if (index == 0)
 				return latex::write_matrix_display(work.view(), latex::MatrixBrackets::VMatrix, {out.latex, out.latex_cap});
-
-		if (index == total - 1) {
-				Writer w{out.latex, out.latex_cap, 0};
-				ErrorCode ec2 = w.append("$$\\det(A_{");
-				if (!is_ok(ec2))
-						return ec2;
-				ec2 = w.append_index1(ctx->col);
-				if (!is_ok(ec2))
-						return ec2;
-				ec2 = w.append("}) = ");
-				if (!is_ok(ec2))
-						return ec2;
-				ec2 = w.append_rational_latex(ctx->det);
-				if (!is_ok(ec2))
-						return ec2;
-				return w.append("$$");
+		if (index == op_count + 1) {
+				Writer w{out.latex, out.latex_cap};
+				w.append("$$\\det(A_{");
+				w.append_index1(col);
+				w.append("}) = ");
+				w.append_rational_latex(value);
+				w.append("$$");
+				return w.status();
 		}
-
 		Rational ignored;
 		RowOp last{};
 		std::size_t ops = 0;
@@ -86,32 +47,18 @@ ErrorCode det_replace_render_step(const void* vctx, std::size_t index, const Ste
 				return ec;
 		if (ops < index)
 				return ErrorCode::StepOutOfRange;
-
 		if (out.caption) {
 				ec = row_op_caption(last, out.caption, out.caption_cap);
 				if (!is_ok(ec))
 						return ec;
 		}
-
 		return latex::write_matrix_display(work.view(), latex::MatrixBrackets::VMatrix, {out.latex, out.latex_cap});
 }
 
-constexpr ExplanationVTable kDetReplaceColVTable = {
-        .step_count = &det_replace_step_count,
-        .render_step = &det_replace_render_step,
-        .destroy = nullptr,
-};
-
-} // namespace
-
-Error op_det_replace_column(MatrixView a,
-        MatrixView b,
-        std::uint8_t col,
-        Arena& scratch,
-        Rational* out,
-        Explanation* expl,
-        const ExplainOptions& opts) noexcept {
-		Error err;
+Error op_det_replace_column(MatrixView a, MatrixView b, std::uint8_t col, MatrixMutView storage,
+        Rational* out, Explanation* expl) noexcept {
+		if (expl)
+				*expl = {};
 		if (!out)
 				return {ErrorCode::Internal};
 		if (a.rows != a.cols)
@@ -119,69 +66,33 @@ Error op_det_replace_column(MatrixView a,
 		if (b.rows != a.rows || b.cols != 1)
 				return err_dim_mismatch(a.dim(), b.dim());
 		if (col >= a.cols) {
-				err.code = ErrorCode::IndexOutOfRange;
-				err.a = a.dim();
+				Error err{ErrorCode::IndexOutOfRange, a.dim()};
 				err.i = col;
 				return err;
 		}
-
-		ArenaScratchScope scratch_scope(scratch);
+		if (!b.data)
+				return {ErrorCode::Internal};
+		if (b.stride < b.cols)
+				return err_invalid_dim(b.dim());
 		MatrixMutView work;
-		ErrorCode ec = build_matrix(a, b, col, scratch, &work);
+		ErrorCode ec = build_matrix(a, b, col, storage, &work);
 		if (!is_ok(ec))
 				return {ec};
-
 		Rational det;
 		std::size_t op_count = 0;
 		ec = detail::det_elim(work, &det, &op_count, static_cast<std::size_t>(-1), nullptr);
-		if (!is_ok(ec)) {
-				err.code = ec;
-				err.a = a.dim();
-				return err;
-		}
-
+		if (!is_ok(ec))
+				return {ec, a.dim()};
 		*out = det;
-
-		if (opts.enable) {
-				if (!opts.persist || !expl)
-						return {ErrorCode::Internal};
-				ArenaScope tx(*opts.persist);
-				void* mem = opts.persist->allocate(sizeof(DetReplaceColCtx), alignof(DetReplaceColCtx));
-				if (!mem)
-						return {ErrorCode::Overflow};
-				auto* ctx = new (mem) DetReplaceColCtx{};
-				ctx->a = a;
-				ctx->b = b;
-				ctx->col = col;
-				ctx->det = det;
-				ctx->op_count = op_count;
-				*expl = Explanation::make(ctx, &kDetReplaceColVTable);
-				tx.commit();
+		if (expl) {
+				expl->kind = Explanation::Kind::DetReplace;
+				expl->input = a;
+				expl->other = b;
+				expl->col = col;
+				expl->value = det;
+				expl->op_count = op_count;
 		}
-
-		return err;
-}
-
-} // namespace matrix_core
-#else
-
-namespace matrix_core {
-Error op_det_replace_column(MatrixView a,
-        MatrixView b,
-        std::uint8_t col,
-        Arena& scratch,
-        Rational* out,
-        Explanation* expl,
-        const ExplainOptions& opts) noexcept {
-		(void)a;
-		(void)b;
-		(void)col;
-		(void)scratch;
-		(void)out;
-		(void)expl;
-		(void)opts;
-		return err_feature_disabled();
+		return {};
 }
 } // namespace matrix_core
-
 #endif

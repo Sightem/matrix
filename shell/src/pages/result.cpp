@@ -5,28 +5,22 @@
 
 #include "matrix_shell/detail/app_internal.hpp"
 
-#include "matrix_core/ops.hpp"
 #include "matrix_core/writer.hpp"
 
 #include <graphx.h>
 #include <keypadc.h>
 
-#include <utility>
 
 namespace matrix_shell {
 namespace {
-using detail::fail_fast;
 using detail::kKbGroup1;
 using detail::kKbGroup6;
 using detail::kKbGroupArrows;
 using detail::kScreenH;
 using detail::kScreenW;
 using detail::op_name;
-using namespace matrix_shell::text_literals;
 
 void render_pivot_cols(std::uint32_t mask, char* buf, std::size_t cap) noexcept {
-		if (!buf || cap == 0)
-				return;
 		buf[0] = '\0';
 		matrix_core::CheckedWriter w{buf, cap};
 		bool first = true;
@@ -41,338 +35,175 @@ void render_pivot_cols(std::uint32_t mask, char* buf, std::size_t cap) noexcept 
 		if (first)
 				w.append("-");
 }
+
+void print_rational(matrix_core::Rational value, char* buf, std::size_t cap) noexcept {
+		matrix_core::CheckedWriter w{buf, cap};
+		w.append_i64(value.num());
+		if (value.den() != 1) {
+				w.put('/');
+				w.append_i64(value.den());
+		}
+		gfx_PrintString(buf);
+}
 } // namespace
 
 void App::render_result(const ResultState& s) noexcept {
-		const ui::Layout l = ui::Layout{};
-
-		render_header(nullptr);
-		gfx_PrintString(op_name(s.op));
-		gfx_PrintString("result.suffix"_tx);
-		if (s.has_steps)
-				render_footer_hint("footer.result_steps_back"_tx);
+		const ui::Layout l{};
+		if (s.op == OperationId::Projection) {
+				render_header(tr(TextId::ResultProjectionTitle));
+		} else {
+				render_header(nullptr);
+				gfx_PrintString(op_name(s.op));
+				gfx_PrintString(tr(TextId::ResultSuffix));
+		}
+		if (s.op == OperationId::SolveRref || s.op == OperationId::Projection)
+				render_footer_hint(tr(s.has_steps ? TextId::FooterProjectionStepsBack : TextId::FooterProjectionBack));
 		else
-				render_footer_hint("footer.clear_back"_tx);
-
+				render_footer_hint(tr(s.has_steps ? TextId::FooterResultStepsBack : TextId::FooterClearBack));
 		gfx_SetTextFGColor(ui::color::kBlack);
 
-		if (s.is_scalar) {
-				if (s.op == OperationId::SpanTest || s.op == OperationId::IndepTest) {
-						const int y0 = l.header_h + 26;
-						gfx_SetTextXY(l.margin_x, y0);
-						gfx_PrintString((s.op == OperationId::SpanTest) ? "result.span_label"_tx : "result.indep_label"_tx);
-						gfx_PrintString((s.num != 0) ? "result.bool_yes"_tx : "result.bool_no"_tx);
-
-						gfx_SetTextXY(l.margin_x, y0 + 14);
-						gfx_PrintString("result.rank_eq"_tx);
-						fmt_buf_[0] = '\0';
-						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-						w.append_u64(static_cast<std::uint64_t>(s.i));
-						gfx_PrintString(fmt_buf_);
-
-						gfx_PrintString("result.m_eq"_tx);
-						fmt_buf_[0] = '\0';
-						matrix_core::CheckedWriter w2{fmt_buf_, sizeof(fmt_buf_)};
-						w2.append_u64(static_cast<std::uint64_t>(s.rows));
-						gfx_PrintString(fmt_buf_);
-						gfx_PrintString("result.n_eq"_tx);
-						fmt_buf_[0] = '\0';
-						matrix_core::CheckedWriter w3{fmt_buf_, sizeof(fmt_buf_)};
-						w3.append_u64(static_cast<std::uint64_t>(s.cols));
-						gfx_PrintString(fmt_buf_);
-
-						gfx_SetTextXY(l.margin_x, y0 + 28);
-						gfx_PrintString("result.piv_eq"_tx);
-						render_pivot_cols(static_cast<std::uint32_t>(s.den), fmt_buf_, sizeof(fmt_buf_));
-						gfx_PrintString(fmt_buf_);
-						return;
-				}
-
-				if (s.op == OperationId::Det) {
-						gfx_SetTextXY(l.margin_x, l.header_h + 30);
-						gfx_PrintString("det(");
-						gfx_PrintChar(static_cast<char>('A' + s.slot_a));
-						gfx_PrintString(") = ");
-						fmt_buf_[0] = '\0';
-						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-						if (s.den == 1) {
-								w.append_i64(s.num);
-						} else {
-								w.append_i64(s.num);
-								w.put('/');
-								w.append_i64(s.den);
-						}
-						gfx_PrintString(fmt_buf_);
-						return;
-				}
-
-				if (s.op == OperationId::Dot) {
-						gfx_SetTextXY(l.margin_x, l.header_h + 30);
-						gfx_PrintString("dot(");
-						gfx_PrintChar(static_cast<char>('A' + s.slot_a));
-						gfx_PrintString(", ");
-						gfx_PrintChar(static_cast<char>('A' + s.slot_b));
-						gfx_PrintString(") = ");
-
-						fmt_buf_[0] = '\0';
-						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-						if (s.den == 1)
-								w.append_i64(s.num);
-						else {
-								w.append_i64(s.num);
-								w.put('/');
-								w.append_i64(s.den);
-						}
-						gfx_PrintString(fmt_buf_);
-						return;
-				}
-
-#if MATRIX_SHELL_ENABLE_COFACTOR
-				if (s.op == OperationId::CofactorElement) {
-						const int y0 = l.header_h + 30;
-
-						gfx_SetTextXY(l.margin_x, y0);
-						gfx_PrintString("C_{");
-
-						fmt_buf_[0] = '\0';
-						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-						w.append_u64(static_cast<std::uint64_t>(s.i) + 1u);
-						w.put(',');
-						w.append_u64(static_cast<std::uint64_t>(s.j) + 1u);
-						gfx_PrintString(fmt_buf_);
-						gfx_PrintString("} = ");
-
-						fmt_buf_[0] = '\0';
-						matrix_core::CheckedWriter w2{fmt_buf_, sizeof(fmt_buf_)};
-						if (s.den == 1)
-								w2.append_i64(s.num);
-						else {
-								w2.append_i64(s.num);
-								w2.put('/');
-								w2.append_i64(s.den);
-						}
-						gfx_PrintString(fmt_buf_);
-						return;
-				}
-#endif
-
-				// scalar result op not handled should not happen
-				SHELL_DBG("[result] unsupported scalar op=%s num=%lld den=%lld\n", op_name(s.op), (long long)s.num, (long long)s.den);
-				gfx_SetTextXY(l.margin_x, l.header_h + 30);
-				gfx_PrintString("result.internal_scalar_error"_tx);
+		if (s.op == OperationId::Projection) {
+				const auto& result = s.value.projection;
+				gfx_SetTextXY(l.margin_x, l.header_h + 4);
+				gfx_PrintString(tr(result.show_orthogonal ? TextId::ResultOrthLabel : TextId::ResultProjLabel));
+				gfx_PrintString(tr(TextId::ResultProjectionUPrefix));
+				gfx_PrintChar(static_cast<char>('A' + s.slot_a));
+				gfx_PrintString(tr(TextId::ResultProjectionVPrefix));
+				gfx_PrintChar(static_cast<char>('A' + s.slot_b));
+				gfx_PrintString(")");
+				gfx_SetTextXY(l.margin_x, l.header_h + 18);
+				gfx_PrintString(tr(TextId::ResultKLabel));
+				print_rational(result.factor, fmt_buf_, sizeof(fmt_buf_));
+				render_result_grid(result.show_orthogonal ? result.orthogonal : result.projected, l.header_h + 34);
 				return;
 		}
 
-		if (!s.data || s.rows < 1 || s.cols < 1 || s.stride < s.cols)
-				fail_fast("render_result: invalid matrix result state");
-
-		int grid_top = l.header_h + 8;
-		if (s.op == OperationId::SolveRref || s.op == OperationId::ColSpaceBasis || s.op == OperationId::RowSpaceBasis ||
-		        s.op == OperationId::NullSpaceBasis || s.op == OperationId::LeftNullSpaceBasis) {
-				gfx_SetTextXY(l.margin_x, l.header_h + 4);
-				gfx_PrintString("result.rank_eq"_tx);
-				fmt_buf_[0] = '\0';
+		if (s.op == OperationId::SpanTest || s.op == OperationId::IndepTest) {
+				const auto& result = s.value.predicate;
+				const int y = l.header_h + 26;
+				gfx_SetTextXY(l.margin_x, y);
+				gfx_PrintString(s.op == OperationId::SpanTest ? tr(TextId::ResultSpanLabel) : tr(TextId::ResultIndependentLabel));
+				gfx_PrintString(result.value ? tr(TextId::ResultBoolYes) : tr(TextId::ResultBoolNo));
+				gfx_SetTextXY(l.margin_x, y + 14);
 				matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-				w.append_u64(static_cast<std::uint64_t>(s.i));
+				w.append(tr(TextId::ResultRankEq));
+				w.append_u64(result.space.rank);
+				w.append(tr(TextId::ResultMEq));
+				w.append_u64(result.input.rows);
+				w.append(tr(TextId::ResultNEq));
+				w.append_u64(result.input.cols);
 				gfx_PrintString(fmt_buf_);
-
-				gfx_PrintString("result.null_eq"_tx);
-				fmt_buf_[0] = '\0';
-				matrix_core::CheckedWriter w2{fmt_buf_, sizeof(fmt_buf_)};
-				w2.append_u64(static_cast<std::uint64_t>(s.j));
+				gfx_SetTextXY(l.margin_x, y + 28);
+				gfx_PrintString(tr(TextId::ResultPivEq));
+				render_pivot_cols(result.space.pivot_mask, fmt_buf_, sizeof(fmt_buf_));
 				gfx_PrintString(fmt_buf_);
-
-				gfx_PrintString("result.piv_compact_eq"_tx);
-				render_pivot_cols(static_cast<std::uint32_t>(s.num), fmt_buf_, sizeof(fmt_buf_));
-				gfx_PrintString(fmt_buf_);
-
-				gfx_SetTextXY(l.margin_x, l.header_h + 16);
-				if (s.op == OperationId::RowSpaceBasis) {
-						gfx_PrintString("result.rows_basis"_tx);
-				} else if (s.op == OperationId::SolveRref) {
-						if (s.cols == 1) {
-								gfx_PrintString("result.solution_vector"_tx);
-						} else {
-								gfx_PrintString("result.param_solution"_tx);
-						}
-				} else {
-						gfx_PrintString("result.cols_basis"_tx);
-				}
-				grid_top = l.header_h + 30;
+				return;
 		}
 
-		const int grid_left = l.margin_x;
-		const int max_cols = 6;
-		const int max_rows = 6;
+		if (s.op == OperationId::Det || s.op == OperationId::Dot || s.op == OperationId::CofactorElement) {
+				gfx_SetTextXY(l.margin_x, l.header_h + 30);
+				if (s.op == OperationId::CofactorElement) {
+						const auto& result = s.value.cofactor;
+						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
+						w.append("C_{");
+						w.append_index1(result.row);
+						w.put(',');
+						w.append_index1(result.col);
+						w.append("} = ");
+						gfx_PrintString(fmt_buf_);
+						print_rational(result.value, fmt_buf_, sizeof(fmt_buf_));
+				} else {
+						gfx_PrintString(s.op == OperationId::Det ? "det(" : "dot(");
+						gfx_PrintChar(static_cast<char>('A' + s.slot_a));
+						if (s.op == OperationId::Dot) {
+								gfx_PrintString(", ");
+								gfx_PrintChar(static_cast<char>('A' + s.slot_b));
+						}
+						gfx_PrintString(") = ");
+						print_rational(s.value.scalar, fmt_buf_, sizeof(fmt_buf_));
+				}
+				return;
+		}
 
-		const int cell_w = (kScreenW - 2 * l.margin_x) / max_cols;
-		const int cell_h = (kScreenH - l.header_h - l.footer_h - 2 * l.margin_y) / max_rows;
+		matrix_core::MatrixView matrix;
+		const SpaceSummary* space = nullptr;
+		if (s.op == OperationId::SolveRref) {
+				const auto& result = s.value.solution;
+				matrix = result.show_null_basis ? result.null_basis : result.particular;
+				space = &result.space;
+		} else if (s.op == OperationId::ColSpaceBasis || s.op == OperationId::RowSpaceBasis ||
+		        s.op == OperationId::NullSpaceBasis || s.op == OperationId::LeftNullSpaceBasis) {
+				matrix = s.value.basis.vectors;
+				space = &s.value.basis.space;
+		} else {
+				matrix = s.value.matrix;
+		}
 
-		const std::uint8_t rows = s.rows;
-		const std::uint8_t cols = s.cols;
+		int grid_top = l.header_h + 8;
+		if (space) {
+				gfx_SetTextXY(l.margin_x, l.header_h + 4);
+				matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
+				w.append(tr(TextId::ResultRankEq));
+				w.append_u64(space->rank);
+				w.append(tr(TextId::ResultNullEq));
+				w.append_u64(space->nullity);
+				w.append(tr(TextId::ResultPivCompactEq));
+				gfx_PrintString(fmt_buf_);
+				render_pivot_cols(space->pivot_mask, fmt_buf_, sizeof(fmt_buf_));
+				gfx_PrintString(fmt_buf_);
+				gfx_SetTextXY(l.margin_x, l.header_h + 16);
+				if (s.op == OperationId::SolveRref)
+						gfx_PrintString(s.value.solution.show_null_basis ? tr(TextId::ResultSolutionBasis) : tr(TextId::ResultParticularSolution));
+				else
+						gfx_PrintString(s.op == OperationId::RowSpaceBasis ? tr(TextId::ResultRowsBasis) : tr(TextId::ResultColsBasis));
+				grid_top = l.header_h + 30;
+		}
+		render_result_grid(matrix, grid_top);
+}
 
-		for (std::uint8_t r = 0; r < rows; r++) {
-				for (std::uint8_t c = 0; c < cols; c++) {
-						const int x = grid_left + c * cell_w;
-						const int y = grid_top + r * cell_h;
-
+void App::render_result_grid(matrix_core::MatrixView matrix, int top) noexcept {
+		const ui::Layout l{};
+		if (matrix.rows == 0 || matrix.cols == 0) {
+				gfx_SetTextXY(l.margin_x, top);
+				gfx_PrintString(tr(TextId::ResultEmptyBasis));
+				return;
+		}
+		const int cell_w = (kScreenW - 2 * l.margin_x) / 6;
+		const int cell_h = (kScreenH - l.footer_h - l.margin_y - top) / 6;
+		for (std::uint8_t r = 0; r < matrix.rows; r++) {
+				for (std::uint8_t c = 0; c < matrix.cols; c++) {
+						const int x = l.margin_x + c * cell_w;
+						const int y = top + r * cell_h;
 						gfx_SetColor(ui::color::kLightGray);
 						gfx_FillRectangle(x, y, cell_w - 1, cell_h - 1);
 						gfx_SetColor(ui::color::kDarkGray);
 						gfx_Rectangle(x, y, cell_w - 1, cell_h - 1);
-
-						const matrix_core::Rational& v = s.data[static_cast<std::size_t>(r) * s.stride + static_cast<std::size_t>(c)];
-						fmt_buf_[0] = '\0';
-						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-						if (v.den() == 1) {
-								w.append_i64(v.num());
-						} else {
-								w.append_i64(v.num());
-								w.put('/');
-								w.append_i64(v.den());
-						}
-
 						gfx_SetTextFGColor(ui::color::kBlack);
 						gfx_SetTextXY(x + 2, y + 3);
-						gfx_PrintString(fmt_buf_);
+						print_rational(matrix.at(r, c), fmt_buf_, sizeof(fmt_buf_));
 				}
 		}
 }
 
 void App::update_result(ResultState& s) noexcept {
-		// steps (cramer uses a selector menu, others go straight to pager)
-#if MATRIX_SHELL_ENABLE_CRAMER
-		if (s.op == OperationId::Cramer && s.has_steps && input_.pressed(kKbGroup1, kb_2nd)) {
-				SHELL_DBG("[result] 2ND cramer steps menu\n");
-				REQUIRE(push(Page::make_cramer_steps_menu(s.slot_a, s.slot_b, s.rows)), "push cramer steps menu failed");
+		if (s.has_steps && input_.pressed(kKbGroup1, kb_2nd)) {
+				if (s.op == OperationId::Cramer)
+						push(Page::make_cramer_steps_menu(s.slot_a, s.slot_b, s.value.matrix.rows));
+				else
+						push(Page::make_steps());
 				return;
 		}
-#endif
-		if (s.has_steps && input_.pressed(kKbGroup1, kb_2nd) && expl_.available()) {
-				SHELL_DBG("[result] 2ND steps\n");
-				REQUIRE(push(Page::make_steps()), "push steps failed");
-				return;
-		}
-
-		if (!input_.pressed(kKbGroup6, kb_Clear))
-				return;
-		SHELL_DBG("[result] CLEAR back -> drop tail\n");
-		REQUIRE(pop(), "pop failed");
-		// drop ephemeral result buffers
-		persist_.rewind(persist_base_mark_);
-		persist_tail_mark_ = persist_base_mark_;
-		expl_ = {};
-}
-
-void App::render_projection_result(const ProjectionResultState& s) noexcept {
-		const ui::Layout l = ui::Layout{};
-
-		render_header("result.projection_title"_tx);
-		if (s.has_steps)
-				render_footer_hint("footer.projection_steps_back"_tx);
-		else
-				render_footer_hint("footer.projection_back"_tx);
-
-		const bool show_proj = (s.mode == 0);
-		if (s.rows < 1 || s.cols < 1)
-				fail_fast("render_projection_result: invalid dims");
-		if (show_proj ? (s.proj_data == nullptr) : (s.orth_data == nullptr))
-				fail_fast("render_projection_result: missing vector data");
-		const matrix_core::MatrixView vec = show_proj ? matrix_core::MatrixView{s.rows, s.cols, s.stride_proj, s.proj_data}
-		                                              : matrix_core::MatrixView{s.rows, s.cols, s.stride_orth, s.orth_data};
-		if (vec.stride < vec.cols)
-				fail_fast("render_projection_result: invalid stride");
-
-		gfx_SetTextFGColor(ui::color::kBlack);
-
-		// info line
-		gfx_SetTextXY(l.margin_x, l.header_h + 4);
-		gfx_PrintString(show_proj ? "result.proj_label"_tx : "result.orth_label"_tx);
-		gfx_PrintString("result.proj_u_prefix"_tx);
-		gfx_PrintChar(static_cast<char>('A' + s.slot_u));
-		gfx_PrintString("result.proj_v_prefix"_tx);
-		gfx_PrintChar(static_cast<char>('A' + s.slot_v));
-		gfx_PrintString(")");
-
-		// k line
-		gfx_SetTextXY(l.margin_x, l.header_h + 18);
-		gfx_PrintString("result.k_label"_tx);
-		fmt_buf_[0] = '\0';
-		{
-				matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-				if (s.k_den == 1) {
-						w.append_i64(s.k_num);
-				} else {
-						w.append_i64(s.k_num);
-						w.put('/');
-						w.append_i64(s.k_den);
-				}
-		}
-		gfx_PrintString(fmt_buf_);
-
-		// vector grid
-		const int grid_top = l.header_h + 34;
-		const int grid_left = l.margin_x;
-		const int max_cols = 6;
-		const int max_rows = 6;
-
-		const int cell_w = (kScreenW - 2 * l.margin_x) / max_cols;
-		const int cell_h = (kScreenH - l.header_h - l.footer_h - 2 * l.margin_y) / max_rows;
-
-		const std::uint8_t rows = vec.rows;
-		const std::uint8_t cols = vec.cols;
-
-		for (std::uint8_t r = 0; r < rows; r++) {
-				for (std::uint8_t c = 0; c < cols; c++) {
-						const int x = grid_left + c * cell_w;
-						const int y = grid_top + r * cell_h;
-
-						gfx_SetColor(ui::color::kLightGray);
-						gfx_FillRectangle(x, y, cell_w - 1, cell_h - 1);
-						gfx_SetColor(ui::color::kDarkGray);
-						gfx_Rectangle(x, y, cell_w - 1, cell_h - 1);
-
-						const matrix_core::Rational& v = vec.data[static_cast<std::size_t>(r) * vec.stride + static_cast<std::size_t>(c)];
-						fmt_buf_[0] = '\0';
-						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
-						if (v.den() == 1) {
-								w.append_i64(v.num());
-						} else {
-								w.append_i64(v.num());
-								w.put('/');
-								w.append_i64(v.den());
-						}
-
-						gfx_SetTextFGColor(ui::color::kBlack);
-						gfx_SetTextXY(x + 2, y + 3);
-						gfx_PrintString(fmt_buf_);
-				}
-		}
-}
-
-void App::update_projection_result(ProjectionResultState& s) noexcept {
-		// steps
-		if (s.has_steps && input_.pressed(kKbGroup1, kb_2nd) && expl_.available()) {
-				SHELL_DBG("[proj] 2ND steps\n");
-				REQUIRE(push(Page::make_steps()), "push steps failed");
-				return;
-		}
-
-		// toggle view
-		if (input_.repeat(kKbGroupArrows, kb_Left) || input_.repeat(kKbGroupArrows, kb_Right)) {
-				s.mode = (s.mode == 0) ? 1 : 0;
-				SHELL_DBG("[proj] toggle mode=%u\n", (unsigned)s.mode);
+		if ((s.op == OperationId::SolveRref || s.op == OperationId::Projection) &&
+		        (input_.repeat(kKbGroupArrows, kb_Left) || input_.repeat(kKbGroupArrows, kb_Right))) {
+				bool& toggle = s.op == OperationId::SolveRref ? s.value.solution.show_null_basis : s.value.projection.show_orthogonal;
+				toggle = !toggle;
 				return;
 		}
 
 		if (!input_.pressed(kKbGroup6, kb_Clear))
 				return;
-
-		SHELL_DBG("[proj] CLEAR back -> drop tail\n");
-		REQUIRE(pop(), "pop failed");
-		persist_.rewind(persist_base_mark_);
-		persist_tail_mark_ = persist_base_mark_;
-		expl_ = {};
+		SHELL_DBG("[result] CLEAR back\n");
+		pop();
 }
 
 } // namespace matrix_shell

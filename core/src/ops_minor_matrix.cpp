@@ -5,16 +5,9 @@
 
 namespace matrix_core {
 namespace {
-ErrorCode build_submatrix(MatrixView a, std::uint8_t del_r, std::uint8_t del_c, Arena& arena, MatrixMutView* out) noexcept {
-		if (a.rows != a.cols)
-				return ErrorCode::NotSquare;
-		if (a.rows <= 1)
-				return ErrorCode::InvalidDimension;
-		if (del_r >= a.rows || del_c >= a.cols)
-				return ErrorCode::IndexOutOfRange;
-
+ErrorCode build_submatrix(MatrixView a, std::uint8_t del_r, std::uint8_t del_c, MatrixMutView storage, MatrixMutView* out) noexcept {
 		MatrixMutView sub;
-		ErrorCode ec = matrix_alloc(arena, static_cast<std::uint8_t>(a.rows - 1), static_cast<std::uint8_t>(a.cols - 1), &sub);
+		ErrorCode ec = matrix_work_view(storage, static_cast<std::uint8_t>(a.rows - 1), static_cast<std::uint8_t>(a.cols - 1), &sub);
 		if (!is_ok(ec))
 				return ec;
 
@@ -37,7 +30,7 @@ ErrorCode build_submatrix(MatrixView a, std::uint8_t del_r, std::uint8_t del_c, 
 }
 } // namespace
 
-Error op_minor_matrix(MatrixView a, Arena& scratch, MatrixMutView out) noexcept {
+Error op_minor_matrix(MatrixView a, MatrixMutView work, MatrixMutView out) noexcept {
 		if (a.rows != a.cols)
 				return err_not_square(a.dim());
 		if (a.rows <= 1) {
@@ -54,13 +47,15 @@ Error op_minor_matrix(MatrixView a, Arena& scratch, MatrixMutView out) noexcept 
 				err.b = out.dim();
 				return err;
 		}
+		if (!a.data || !out.data)
+				return {ErrorCode::Internal};
+		if (a.stride < a.cols || out.stride < out.cols)
+				return err_invalid_dim(a.dim());
 
 		for (std::uint8_t i = 0; i < a.rows; i++) {
 				for (std::uint8_t j = 0; j < a.cols; j++) {
-						ArenaScratchScope elem_scope(scratch);
-
 						MatrixMutView sub;
-						ErrorCode ec = build_submatrix(a, i, j, scratch, &sub);
+						ErrorCode ec = build_submatrix(a, i, j, work, &sub);
 						if (!is_ok(ec)) {
 								Error err;
 								err.code = ec;
@@ -71,8 +66,7 @@ Error op_minor_matrix(MatrixView a, Arena& scratch, MatrixMutView out) noexcept 
 						}
 
 						Rational det = Rational::from_int(0);
-						std::size_t op_count = 0;
-						ec = detail::det_elim(sub, &det, &op_count, static_cast<std::size_t>(-1), nullptr);
+						ec = detail::det_elim(sub, &det, nullptr, static_cast<std::size_t>(-1), nullptr);
 						if (!is_ok(ec)) {
 								Error err;
 								err.code = ec;
@@ -89,15 +83,4 @@ Error op_minor_matrix(MatrixView a, Arena& scratch, MatrixMutView out) noexcept 
 	return {};
 }
 } // namespace matrix_core
-#else
-
-namespace matrix_core {
-Error op_minor_matrix(MatrixView a, Arena& scratch, MatrixMutView out) noexcept {
-		(void)a;
-		(void)scratch;
-		(void)out;
-		return err_feature_disabled();
-}
-} // namespace matrix_core
-
 #endif

@@ -1,53 +1,31 @@
 #include "matrix_core/matrix.hpp"
 
 namespace matrix_core {
-namespace {
-constexpr bool valid_dim(std::uint8_t rows, std::uint8_t cols) noexcept {
-		return rows >= 1 && rows <= kMaxRows && cols >= 1 && cols <= kMaxCols;
-}
-} // namespace
 
-ErrorCode matrix_alloc(Arena& arena, std::uint8_t rows, std::uint8_t cols, MatrixMutView* out) noexcept {
+ErrorCode matrix_work_view(MatrixMutView storage, std::uint8_t rows, std::uint8_t cols, MatrixMutView* out) noexcept {
 		if (!out)
 				return ErrorCode::Internal;
-		if (!valid_dim(rows, cols))
-				return ErrorCode::InvalidDimension;
-
-		const std::size_t count = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-		void* mem = arena.allocate(sizeof(Rational) * count, alignof(Rational));
-		if (!mem)
+		if (!rows || !cols) {
+				*out = {rows, cols, storage.stride, nullptr};
+				return ErrorCode::Ok;
+		}
+		if (rows > storage.rows || cols > storage.cols)
 				return ErrorCode::Overflow;
-
-		auto* data = static_cast<Rational*>(mem);
-		for (std::size_t i = 0; i < count; i++)
-				data[i] = Rational::from_int(0);
-
-		out->rows = rows;
-		out->cols = cols;
-		out->stride = cols;
-		out->data = data;
-		return ErrorCode::Ok;
-}
-
-ErrorCode matrix_clone(Arena& arena, MatrixView src, MatrixMutView* out) noexcept {
-		if (!out)
+		if (!storage.data)
 				return ErrorCode::Internal;
-		MatrixMutView dst;
-		ErrorCode ec = matrix_alloc(arena, src.rows, src.cols, &dst);
-		if (!is_ok(ec))
-				return ec;
-		ec = matrix_copy(src, dst);
-		if (!is_ok(ec))
-				return ec;
-		*out = dst;
+		if (storage.stride < storage.cols)
+				return ErrorCode::InvalidDimension;
+		*out = {rows, cols, storage.stride, storage.data};
 		return ErrorCode::Ok;
 }
 
 ErrorCode matrix_copy(MatrixView src, MatrixMutView dst) noexcept {
-		if (!src.data || !dst.data)
-				return ErrorCode::Internal;
 		if (src.rows != dst.rows || src.cols != dst.cols)
 				return ErrorCode::DimensionMismatch;
+		if (src.rows && src.cols && (!src.data || !dst.data))
+				return ErrorCode::Internal;
+		if (src.rows && src.cols && (src.stride < src.cols || dst.stride < dst.cols))
+				return ErrorCode::InvalidDimension;
 
 		for (std::uint8_t row = 0; row < src.rows; row++) {
 				for (std::uint8_t col = 0; col < src.cols; col++)
@@ -70,6 +48,10 @@ ErrorCode matrix_add(MatrixView a, MatrixView b, MatrixMutView out) noexcept {
 				return ErrorCode::DimensionMismatch;
 		if (out.rows != a.rows || out.cols != a.cols)
 				return ErrorCode::DimensionMismatch;
+		if (a.rows && a.cols && (!a.data || !b.data || !out.data))
+				return ErrorCode::Internal;
+		if (a.rows && a.cols && (a.stride < a.cols || b.stride < b.cols || out.stride < out.cols))
+				return ErrorCode::InvalidDimension;
 
 		for (std::uint8_t row = 0; row < a.rows; row++) {
 				for (std::uint8_t col = 0; col < a.cols; col++) {
@@ -88,6 +70,10 @@ ErrorCode matrix_sub(MatrixView a, MatrixView b, MatrixMutView out) noexcept {
 				return ErrorCode::DimensionMismatch;
 		if (out.rows != a.rows || out.cols != a.cols)
 				return ErrorCode::DimensionMismatch;
+		if (a.rows && a.cols && (!a.data || !b.data || !out.data))
+				return ErrorCode::Internal;
+		if (a.rows && a.cols && (a.stride < a.cols || b.stride < b.cols || out.stride < out.cols))
+				return ErrorCode::InvalidDimension;
 
 		for (std::uint8_t row = 0; row < a.rows; row++) {
 				for (std::uint8_t col = 0; col < a.cols; col++) {
@@ -106,6 +92,11 @@ ErrorCode matrix_mul(MatrixView a, MatrixView b, MatrixMutView out) noexcept {
 				return ErrorCode::DimensionMismatch;
 		if (out.rows != a.rows || out.cols != b.cols)
 				return ErrorCode::DimensionMismatch;
+		if ((a.rows && a.cols && !a.data) || (b.rows && b.cols && !b.data) || (out.rows && out.cols && !out.data))
+				return ErrorCode::Internal;
+		if ((a.rows && a.cols && a.stride < a.cols) || (b.rows && b.cols && b.stride < b.cols) ||
+		        (out.rows && out.cols && out.stride < out.cols))
+				return ErrorCode::InvalidDimension;
 
 		for (std::uint8_t i = 0; i < out.rows; i++) {
 				for (std::uint8_t j = 0; j < out.cols; j++) {
@@ -130,6 +121,10 @@ ErrorCode matrix_mul(MatrixView a, MatrixView b, MatrixMutView out) noexcept {
 ErrorCode matrix_transpose(MatrixView a, MatrixMutView out) noexcept {
 		if (out.rows != a.cols || out.cols != a.rows)
 				return ErrorCode::DimensionMismatch;
+		if (a.rows && a.cols && (!a.data || !out.data))
+				return ErrorCode::Internal;
+		if (a.rows && a.cols && (a.stride < a.cols || out.stride < out.cols))
+				return ErrorCode::InvalidDimension;
 
 		for (std::uint8_t row = 0; row < a.rows; row++) {
 				for (std::uint8_t col = 0; col < a.cols; col++)

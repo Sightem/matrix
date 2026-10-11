@@ -24,8 +24,12 @@ def _ensure_native_compile_db(repo_root: Path, native_build_dir: Path) -> Path:
     if compile_db.exists():
         return compile_db
 
-    print(f"[clangd] Missing {compile_db}, running `cmake --preset native`...")
-    subprocess.run(["cmake", "--preset", "native"], cwd=repo_root, check=True)
+    print(f"[clangd] Missing {compile_db}, configuring the native preset...")
+    subprocess.run(
+        ["cmake", "--preset", "native", "-B", str(native_build_dir)],
+        cwd=repo_root,
+        check=True,
+    )
 
     if not compile_db.exists():
         raise RuntimeError(
@@ -68,7 +72,6 @@ def _generate_shell_compile_db(
         # Must be AFTER host system headers; CEdev provides sys/types.h etc.
         f"-idirafter{cedev_include}",
         # Match CE build feature flags used in CMakeLists.txt.
-        "-DTEX_USE_FONTLIB",
         "-DTEX_DIRECT_RENDER",
     ]
 
@@ -160,7 +163,7 @@ def main() -> int:
             '    "-I${workspaceFolder}/shell/include",\n'
             '    "-I${workspaceFolder}/third_party/libtexce/src",\n'
             '    "-I${workspaceFolder}/third_party/libtexce/include",\n'
-            '    "-idirafter${env:HOME}/CEdev/include"\n'
+            f'    {json.dumps(f"-idirafter{cedev_include}")}\n'
             "  ],\n"
             '  "C_Cpp.intelliSenseEngine": "disabled",\n'
             '  "C_Cpp.errorSquiggles": "disabled",\n'
@@ -181,7 +184,7 @@ def main() -> int:
     )
 
     print("[clangd] Done.")
-    print("  - core/compile_commands.json -> build/native/compile_commands.json")
+    print(f"  - core/compile_commands.json -> {native_compile_db}")
     print("  - shell/compile_commands.json generated for host clang++ parsing")
     if not args.no_vscode:
         print("  - .vscode/{settings,extensions}.json written")

@@ -10,12 +10,10 @@
 #include <graphx.h>
 #include <keypadc.h>
 
-#include <cassert>
 #include <cstring>
 
 namespace matrix_shell {
 namespace {
-using detail::fail_fast;
 using detail::kKbGroup1;
 using detail::kKbGroup3;
 using detail::kKbGroup4;
@@ -24,15 +22,10 @@ using detail::kKbGroup6;
 using detail::kKbGroupArrows;
 using detail::kScreenH;
 using detail::kScreenW;
-using namespace matrix_shell::text_literals;
 } // namespace
 
 void App::render_editor(const EditorState& s) noexcept {
-		if (s.slot >= kSlotCount)
-				fail_fast("render_editor: invalid slot");
 		const Slot& slot = slots_[s.slot];
-		if (!slot.is_set())
-				fail_fast("render_editor: slot is unset");
 		render_header(nullptr);
 		gfx_PrintChar(static_cast<char>('A' + s.slot));
 		gfx_PrintChar(' ');
@@ -41,9 +34,9 @@ void App::render_editor(const EditorState& s) noexcept {
 		gfx_PrintChar(static_cast<char>('0' + slot.cols));
 
 		if (s.editing)
-				render_footer_hint("footer.editor_input"_tx);
+				render_footer_hint(tr(TextId::FooterEditorInput));
 		else
-				render_footer_hint("footer.editor_nav"_tx);
+				render_footer_hint(tr(TextId::FooterEditorNav));
 
 		const ui::Layout l = ui::Layout{};
 
@@ -95,26 +88,15 @@ void App::render_editor(const EditorState& s) noexcept {
 				gfx_FillRectangle(0, y, kScreenW, 18);
 				gfx_SetTextFGColor(ui::color::kWhite);
 				gfx_SetTextXY(l.margin_x, y + 4);
-				gfx_PrintString("common.value_prefix"_tx);
+				gfx_PrintString(tr(TextId::CommonValuePrefix));
 				gfx_PrintString(s.edit_buf);
 		}
 }
 
 void App::update_editor(EditorState& s) noexcept {
-		if (s.slot >= kSlotCount) {
-				REQUIRE(pop(), "pop failed (invalid slot)");
-				return;
-		}
-
 		Slot& slot = slots_[s.slot];
-		if (!slot.is_set()) {
-				REQUIRE(pop(), "pop failed (unset slot)");
-				return;
-		}
 
 		if (s.editing) {
-				assert(s.edit_len < sizeof(s.edit_buf));
-				assert(s.edit_buf[s.edit_len] == '\0');
 
 				// cancel edit
 				if (input_.pressed(kKbGroup6, kb_Clear)) {
@@ -143,7 +125,6 @@ void App::update_editor(EditorState& s) noexcept {
 								s.edit_buf[1] = '\0';
 								s.edit_len = 1;
 						} else if (s.edit_buf[0] == '-') {
-								assert(s.edit_len > 0);
 								std::memmove(s.edit_buf, s.edit_buf + 1, static_cast<std::size_t>(s.edit_len));
 								s.edit_len--;
 								s.edit_buf[s.edit_len] = '\0';
@@ -160,8 +141,6 @@ void App::update_editor(EditorState& s) noexcept {
 				}
 
 				auto push_digit = [&](char d) noexcept {
-						assert(s.edit_len < sizeof(s.edit_buf));
-						assert(s.edit_buf[s.edit_len] == '\0');
 						if (s.edit_len + 1 >= sizeof(s.edit_buf))
 								return;
 						s.edit_buf[s.edit_len++] = d;
@@ -198,7 +177,7 @@ void App::update_editor(EditorState& s) noexcept {
 						return;
 				}
 				if (!parse_i64(s.edit_buf, &v)) {
-						show_message("msg.invalid_integer"_tx);
+						show_message(tr(TextId::MessageInvalidInteger));
 						s.editing = false;
 						return;
 				}
@@ -214,7 +193,7 @@ void App::update_editor(EditorState& s) noexcept {
 		// non-editing navigation/back
 		if (input_.pressed(kKbGroup6, kb_Clear)) {
 				SHELL_DBG("[edit] CLEAR back slot=%c\n", (char)('A' + s.slot));
-				REQUIRE(pop(), "pop failed");
+				pop();
 				return;
 		}
 

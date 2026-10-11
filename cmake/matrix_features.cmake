@@ -13,10 +13,6 @@ option(MATRIX_FEATURE_CRAMER "Enable Cramer's rule operation (and det-replace-co
 
 option(MATRIX_SHELL_DEBUG "Enable shell debug logging" OFF)
 
-function(matrix_resolve_feature_deps)
-  # for future dependency toggles
-endfunction()
-
 function(matrix_get_feature_compile_definitions out_var)
   set(defs)
 

@@ -10,30 +10,28 @@
 
 namespace matrix_shell {
 namespace {
-using detail::fail_fast;
 using detail::kKbGroup6;
 using detail::kKbGroupArrows;
 using detail::kScreenH;
-using namespace matrix_shell::text_literals;
 } // namespace
 
 void App::render_dim(const DimState& s) noexcept {
 		render_header(nullptr);
 		gfx_PrintChar(static_cast<char>('A' + s.slot));
-		gfx_PrintString("dim.title_suffix"_tx);
-		render_footer_hint("footer.dim"_tx);
+		gfx_PrintString(tr(TextId::DimTitleSuffix));
+		render_footer_hint(tr(TextId::FooterDim));
 
 		const ui::Layout l = ui::Layout{};
 		const int y = l.header_h + 40;
 
 		gfx_SetTextFGColor(ui::color::kBlack);
 		gfx_SetTextXY(l.margin_x, y);
-		gfx_PrintString("dim.rows"_tx);
+		gfx_PrintString(tr(TextId::DimRowsLabel));
 		gfx_SetTextXY(l.margin_x + 60, y);
 		gfx_PrintChar(static_cast<char>('0' + s.rows));
 
 		gfx_SetTextXY(l.margin_x, y + 18);
-		gfx_PrintString("dim.cols"_tx);
+		gfx_PrintString(tr(TextId::DimColsLabel));
 		gfx_SetTextXY(l.margin_x + 60, y + 18);
 		gfx_PrintChar(static_cast<char>('0' + s.cols));
 }
@@ -41,7 +39,7 @@ void App::render_dim(const DimState& s) noexcept {
 void App::update_dim(DimState& s) noexcept {
 		if (input_.pressed(kKbGroup6, kb_Clear)) {
 				SHELL_DBG("[dim] CLEAR back slot=%c\n", (char)('A' + s.slot));
-				REQUIRE(pop(), "pop failed");
+				pop();
 				return;
 		}
 
@@ -67,34 +65,15 @@ void App::update_dim(DimState& s) noexcept {
 
 		SHELL_DBG("[dim] ENTER slot=%c rows=%u cols=%u\n", (char)('A' + s.slot), (unsigned)s.rows, (unsigned)s.cols);
 
-		const matrix_core::ErrorCode ec = ensure_slot_allocated(s.slot);
-		if (!matrix_core::is_ok(ec)) {
-				if (ec == matrix_core::ErrorCode::Overflow) {
-						show_message("common.out_of_memory"_tx);
-						return;
-				}
-				fail_fast("ensure_slot_allocated: unexpected failure");
-		}
-
-		// resize clear full backing store
-		persist_.rewind(persist_base_mark_);
-		persist_tail_mark_ = persist_base_mark_;
-		expl_ = {};
-		matrix_core::matrix_fill_zero(slots_[s.slot].backing);
+		calculation_.explanation = {};
+		matrix_core::matrix_fill_zero({6, 6, 6, slots_[s.slot].data});
 		slots_[s.slot].rows = s.rows;
 		slots_[s.slot].cols = s.cols;
-		SHELL_DBG("[dim] resized %c active=%ux%u backing=%p base_mark=%u used=%u/%u\n",
-		        (char)('A' + s.slot),
-		        (unsigned)s.rows,
-		        (unsigned)s.cols,
-		        (void*)slots_[s.slot].backing.data,
-		        (unsigned)persist_base_mark_,
-		        (unsigned)persist_.used(),
-		        (unsigned)persist_.capacity());
+		SHELL_DBG("[dim] resized %c active=%ux%u\n", (char)('A' + s.slot), (unsigned)s.rows, (unsigned)s.cols);
 
 		// replace this page with the editor so CLEAR from editor returns to slot list
-		REQUIRE(pop(), "pop failed");
-		REQUIRE(push(Page::make_editor(s.slot)), "push editor failed");
+		pop();
+		push(Page::make_editor(s.slot));
 }
 
 } // namespace matrix_shell

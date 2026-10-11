@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "matrix_core/arena.hpp"
 #include "matrix_core/config.hpp"
 #include "matrix_core/error.hpp"
 #include "matrix_core/rational.hpp"
@@ -51,8 +50,7 @@ struct MatrixMutView {
 		}
 };
 
-ErrorCode matrix_alloc(InOut Arena& arena, In std::uint8_t rows, In std::uint8_t cols, Out MatrixMutView* out) noexcept;
-ErrorCode matrix_clone(InOut Arena& arena, In MatrixView src, Out MatrixMutView* out) noexcept;
+ErrorCode matrix_work_view(In MatrixMutView storage, In std::uint8_t rows, In std::uint8_t cols, Out MatrixMutView* out) noexcept;
 ErrorCode matrix_copy(In MatrixView src, Out MatrixMutView dst) noexcept;
 void matrix_fill_zero(Out MatrixMutView m) noexcept;
 

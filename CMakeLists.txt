@@ -13,7 +13,6 @@ option(MATRIX_BUILD_CE_SHELL_FR "Build French Matrix shell when MATRIX_BUILD_CE_
 option(MATRIX_BUILD_CE_TESTS "Build core unit tests as CE programs when MATRIX_BUILD_CE=ON" OFF)
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/matrix_features.cmake)
-matrix_resolve_feature_deps()
 matrix_print_feature_summary()
 
 matrix_get_feature_compile_definitions(MATRIX_FEATURE_DEFS)
@@ -22,7 +21,6 @@ matrix_get_feature_compile_options(MATRIX_FEATURE_COMPILE_OPTIONS)
 set(MATRIX_CORE_DIR "${CMAKE_CURRENT_LIST_DIR}/core")
 
 set(MATRIX_CORE_HEADERS
-  ${MATRIX_CORE_DIR}/include/matrix_core/arena.hpp
   ${MATRIX_CORE_DIR}/include/matrix_core/config.hpp
   ${MATRIX_CORE_DIR}/include/matrix_core/error.hpp
   ${MATRIX_CORE_DIR}/include/matrix_core/explanation.hpp
@@ -33,7 +31,6 @@ set(MATRIX_CORE_HEADERS
   ${MATRIX_CORE_DIR}/include/matrix_core/rational.hpp
   ${MATRIX_CORE_DIR}/include/matrix_core/row_ops.hpp
   ${MATRIX_CORE_DIR}/include/matrix_core/row_reduction.hpp
-  ${MATRIX_CORE_DIR}/include/matrix_core/slab.hpp
   ${MATRIX_CORE_DIR}/include/matrix_core/spaces.hpp
   ${MATRIX_CORE_DIR}/include/matrix_core/writer.hpp
 )
@@ -120,7 +117,6 @@ if(MATRIX_BUILD_CE)
     )
 
     set(MATRIX_SHELL_CE_COMPILE_OPTIONS
-      -DTEX_USE_FONTLIB
       -DTEX_DIRECT_RENDER
       -Wframe-larger-than=127
       -Wno-error=frame-larger-than
@@ -144,7 +140,7 @@ if(MATRIX_BUILD_CE)
         LIBLOAD
           graphx
           keypadc
-          fontlibc
+          fileioc
 
         COMPILE_OPTIONS
           ${MATRIX_SHELL_CE_COMPILE_OPTIONS}
@@ -208,126 +204,76 @@ if(MATRIX_BUILD_CE)
     if(MATRIX_FEATURE_CRAMER)
       matrix_add_ce_core_test(ce_test_cramer TSTCRAM ${MATRIX_CORE_DIR}/tests_ce/test_cramer_ce.cpp)
     endif()
-
   endif()
 
   message(STATUS "Matrix CE build enabled")
   return()
 endif()
 
-# native library + tests
-function(matrix_core_apply target_name)
-  target_include_directories(${target_name} PRIVATE ${MATRIX_CORE_DIR}/include)
-  target_compile_features(${target_name} PRIVATE cxx_std_20)
+add_library(matrix_core STATIC ${MATRIX_CORE_SOURCES} ${MATRIX_CORE_HEADERS})
+target_include_directories(matrix_core PUBLIC ${MATRIX_CORE_DIR}/include)
+target_compile_features(matrix_core PUBLIC cxx_std_20)
+target_compile_definitions(matrix_core PUBLIC ${MATRIX_FEATURE_DEFS})
+target_compile_options(matrix_core PUBLIC -fno-exceptions -fno-rtti)
+target_compile_options(matrix_core PRIVATE -fstack-usage)
 
-  target_compile_definitions(${target_name} PRIVATE ${MATRIX_FEATURE_DEFS})
-
-  target_compile_options(${target_name} PRIVATE
-    -fno-exceptions
-    -fno-rtti
+if(MATRIX_STRICT_WARNINGS)
+  target_compile_options(matrix_core PUBLIC
+    -Wall -Wextra -Wpedantic -Werror
+    -Wconversion -Wsign-conversion
+    -Wshadow -Wdouble-promotion
+    -Wformat=2 -Wformat-security
+    -Wcast-qual -Wpointer-arith
+    -Wswitch-enum -Wundef
+    -Wnull-dereference -Wfloat-equal
+    -Wredundant-decls -Wunreachable-code
+    -Wimplicit-fallthrough
   )
+endif()
 
-  if(MATRIX_STRICT_WARNINGS)
-    target_compile_options(${target_name} PRIVATE
-      -Wall -Wextra -Wpedantic -Werror
-      -Wconversion -Wsign-conversion
-      -Wshadow -Wdouble-promotion
-      -Wformat=2 -Wformat-security
-      -Wcast-qual -Wpointer-arith
-      -Wswitch-enum -Wundef
-      -Wnull-dereference -Wfloat-equal
-      -Wredundant-decls -Wunreachable-code
-      -Wimplicit-fallthrough
-    )
-  endif()
-endfunction()
-
-add_executable(matrix_profile_cramer
-  ${MATRIX_CORE_SOURCES}
-  ${MATRIX_CORE_HEADERS}
-  ${MATRIX_CORE_DIR}/profile/profile_cramer.cpp
-)
-matrix_core_apply(matrix_profile_cramer)
+add_executable(matrix_profile_cramer ${MATRIX_CORE_DIR}/profile/profile_cramer.cpp)
+target_link_libraries(matrix_profile_cramer PRIVATE matrix_core)
 target_compile_options(matrix_profile_cramer PRIVATE -fstack-usage)
 
 if(MATRIX_ENABLE_TESTS)
   enable_testing()
+  target_compile_options(matrix_core PUBLIC -UNDEBUG)
 
-  add_executable(test_rational
-    ${MATRIX_CORE_SOURCES}
-    ${MATRIX_CORE_HEADERS}
-    ${MATRIX_CORE_DIR}/tests/test_rational.cpp
-  )
-  matrix_core_apply(test_rational)
+  add_executable(test_rational ${MATRIX_CORE_DIR}/tests/test_rational.cpp)
+  target_link_libraries(test_rational PRIVATE matrix_core)
 
-  add_executable(test_matrix_ops
-    ${MATRIX_CORE_SOURCES}
-    ${MATRIX_CORE_HEADERS}
-    ${MATRIX_CORE_DIR}/tests/test_matrix_ops.cpp
-  )
-  matrix_core_apply(test_matrix_ops)
+  add_executable(test_matrix_ops ${MATRIX_CORE_DIR}/tests/test_matrix_ops.cpp)
+  target_link_libraries(test_matrix_ops PRIVATE matrix_core)
 
-  add_executable(test_rref
-    ${MATRIX_CORE_SOURCES}
-    ${MATRIX_CORE_HEADERS}
-    ${MATRIX_CORE_DIR}/tests/test_rref.cpp
-  )
-  matrix_core_apply(test_rref)
+  add_executable(test_rref ${MATRIX_CORE_DIR}/tests/test_rref.cpp)
+  target_link_libraries(test_rref PRIVATE matrix_core)
 
-  add_executable(test_det
-    ${MATRIX_CORE_SOURCES}
-    ${MATRIX_CORE_HEADERS}
-    ${MATRIX_CORE_DIR}/tests/test_det.cpp
-  )
-  matrix_core_apply(test_det)
+  add_executable(test_det ${MATRIX_CORE_DIR}/tests/test_det.cpp)
+  target_link_libraries(test_det PRIVATE matrix_core)
 
   if(MATRIX_FEATURE_MINOR_MATRIX)
-    add_executable(test_minor_matrix
-      ${MATRIX_CORE_SOURCES}
-      ${MATRIX_CORE_HEADERS}
-      ${MATRIX_CORE_DIR}/tests/test_minor_matrix.cpp
-    )
-    matrix_core_apply(test_minor_matrix)
+    add_executable(test_minor_matrix ${MATRIX_CORE_DIR}/tests/test_minor_matrix.cpp)
+    target_link_libraries(test_minor_matrix PRIVATE matrix_core)
   endif()
 
   if(MATRIX_FEATURE_COFACTOR)
-    add_executable(test_cofactor_element
-      ${MATRIX_CORE_SOURCES}
-      ${MATRIX_CORE_HEADERS}
-      ${MATRIX_CORE_DIR}/tests/test_cofactor_element.cpp
-    )
-    matrix_core_apply(test_cofactor_element)
+    add_executable(test_cofactor_element ${MATRIX_CORE_DIR}/tests/test_cofactor_element.cpp)
+    target_link_libraries(test_cofactor_element PRIVATE matrix_core)
   endif()
 
   if(MATRIX_FEATURE_CRAMER)
-    add_executable(test_cramer
-      ${MATRIX_CORE_SOURCES}
-      ${MATRIX_CORE_HEADERS}
-      ${MATRIX_CORE_DIR}/tests/test_cramer.cpp
-    )
-    matrix_core_apply(test_cramer)
+    add_executable(test_cramer ${MATRIX_CORE_DIR}/tests/test_cramer.cpp)
+    target_link_libraries(test_cramer PRIVATE matrix_core)
   endif()
 
-  add_executable(test_inverse
-    ${MATRIX_CORE_SOURCES}
-    ${MATRIX_CORE_HEADERS}
-    ${MATRIX_CORE_DIR}/tests/test_inverse.cpp
-  )
-  matrix_core_apply(test_inverse)
+  add_executable(test_inverse ${MATRIX_CORE_DIR}/tests/test_inverse.cpp)
+  target_link_libraries(test_inverse PRIVATE matrix_core)
 
-  add_executable(test_vectors
-    ${MATRIX_CORE_SOURCES}
-    ${MATRIX_CORE_HEADERS}
-    ${MATRIX_CORE_DIR}/tests/test_vectors.cpp
-  )
-  matrix_core_apply(test_vectors)
+  add_executable(test_vectors ${MATRIX_CORE_DIR}/tests/test_vectors.cpp)
+  target_link_libraries(test_vectors PRIVATE matrix_core)
 
-  add_executable(test_spaces
-    ${MATRIX_CORE_SOURCES}
-    ${MATRIX_CORE_HEADERS}
-    ${MATRIX_CORE_DIR}/tests/test_spaces.cpp
-  )
-  matrix_core_apply(test_spaces)
+  add_executable(test_spaces ${MATRIX_CORE_DIR}/tests/test_spaces.cpp)
+  target_link_libraries(test_spaces PRIVATE matrix_core)
 
   add_test(NAME rational COMMAND test_rational)
   add_test(NAME matrix_ops COMMAND test_matrix_ops)

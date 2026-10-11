@@ -3,9 +3,9 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "matrix_core/arena.hpp"
 #include "matrix_core/config.hpp"
 #include "matrix_core/error.hpp"
+#include "matrix_core/explanation.hpp"
 #include "matrix_core/matrix.hpp"
 
 namespace matrix_core {
@@ -28,17 +28,24 @@ struct SpaceInfo {
 
 ErrorCode space_info_from_rref(In MatrixView rref, In std::uint8_t var_cols, Out SpaceInfo* out) noexcept;
 
-// basis matrices are returned with basis vectors as columns
-// when the subspace is {0} this returns a single zero vector (not a true basis) rather than an empty matrix
-
 // pivot columns of A form a basis for Col(A)
-ErrorCode space_col_basis(In MatrixView a, In const SpaceInfo& info, InOut Arena& arena, Out MatrixMutView* out_basis) noexcept;
+ErrorCode space_col_basis(In MatrixView a, In const SpaceInfo& info, Out MatrixMutView storage, Out MatrixMutView* out_basis) noexcept;
 
 // non zero rows of RREF(A) form a basis for Row(A)
-ErrorCode space_row_basis(In MatrixView rref, In std::uint8_t var_cols, In const SpaceInfo& info, InOut Arena& arena, Out MatrixMutView* out_basis) noexcept;
+ErrorCode space_row_basis(In MatrixView rref, In std::uint8_t var_cols, In const SpaceInfo& info, Out MatrixMutView storage, Out MatrixMutView* out_basis) noexcept;
 
 // construct a basis for Null(A) from RREF(A)
-ErrorCode space_null_basis(In MatrixView rref, In std::uint8_t var_cols, In const SpaceInfo& info, InOut Arena& arena, Out MatrixMutView* out_basis) noexcept;
+ErrorCode space_null_basis(In MatrixView rref, In std::uint8_t var_cols, In const SpaceInfo& info, Out MatrixMutView storage, Out MatrixMutView* out_basis) noexcept;
+
+struct SolveResult {
+		MatrixView particular;
+		MatrixView null_basis;
+		SpaceInfo info;
+};
+
+Error op_solve_rref(In MatrixView a, In MatrixView b, Out MatrixMutView saved_input, Out MatrixMutView work,
+        Out MatrixMutView particular_storage, Out MatrixMutView basis_storage,
+        Out SolveResult* out, Out Explanation* expl) noexcept;
 
 } // namespace matrix_core
 

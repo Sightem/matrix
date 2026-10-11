@@ -3,8 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "matrix_core/arena.hpp"
 #include "matrix_core/error.hpp"
+#include "matrix_core/matrix.hpp"
 
 namespace matrix_core {
 struct StepRenderBuffers {
@@ -12,38 +12,42 @@ struct StepRenderBuffers {
 		std::size_t caption_cap = 0;
 		char* latex = nullptr;
 		std::size_t latex_cap = 0;
-		Arena* scratch = nullptr;
+		MatrixMutView work{};
 };
 
-struct ExplanationVTable;
+struct Explanation {
+		enum class Kind : std::uint8_t {
+				None, Add, Sub, Mul, Transpose, Ref, Rref, Det, Inverse,
+				Cofactor, DetReplace, Dot, Cross, Projection,
+		};
 
-class Explanation {
-	  public:
-		Explanation() noexcept = default;
-		Explanation(const Explanation&) = delete;
-		Explanation& operator=(const Explanation&) = delete;
+		Kind kind = Kind::None;
+		MatrixView input{};
+		MatrixView other{};
+		MatrixView result{};
+		Rational value = Rational::from_int(0);
+		Rational dot_vv = Rational::from_int(0);
+		Rational k = Rational::from_int(0);
+		Rational proj_norm2 = Rational::from_int(0);
+		Rational orth_norm2 = Rational::from_int(0);
+		std::size_t op_count = 0;
+		std::uint8_t row = 0;
+		std::uint8_t col = 0;
 
-		Explanation(Explanation&& other) noexcept;
-		Explanation& operator=(Explanation&& other) noexcept;
-
-		~Explanation();
-
-		bool available() const noexcept { return vtable_ != nullptr && ctx_ != nullptr; }
-
+		bool available() const noexcept { return kind != Kind::None; }
 		std::size_t step_count() const noexcept;
-		ErrorCode render_step(In std::size_t index, In const StepRenderBuffers& out) const noexcept;
+		ErrorCode render_step(std::size_t index, const StepRenderBuffers& out) const noexcept;
 
-		static Explanation make(void* ctx, const ExplanationVTable* vtable) noexcept;
-
-	  private:
-		void* ctx_ = nullptr;
-		const ExplanationVTable* vtable_ = nullptr;
+	private:
+		ErrorCode render_binary(std::size_t index, const StepRenderBuffers& out) const noexcept;
+		ErrorCode render_transpose(std::size_t index, const StepRenderBuffers& out) const noexcept;
+		ErrorCode render_echelon(std::size_t index, const StepRenderBuffers& out) const noexcept;
+		ErrorCode render_det(std::size_t index, const StepRenderBuffers& out) const noexcept;
+		ErrorCode render_inverse(std::size_t index, const StepRenderBuffers& out) const noexcept;
+		ErrorCode render_cofactor(std::size_t index, const StepRenderBuffers& out) const noexcept;
+		ErrorCode render_det_replace(std::size_t index, const StepRenderBuffers& out) const noexcept;
+		ErrorCode render_dot(std::size_t index, const StepRenderBuffers& out) const noexcept;
+		ErrorCode render_cross(std::size_t index, const StepRenderBuffers& out) const noexcept;
+		ErrorCode render_proj(std::size_t index, const StepRenderBuffers& out) const noexcept;
 };
-
-struct ExplanationVTable {
-		std::size_t (*step_count)(In const void*) noexcept;
-		ErrorCode (*render_step)(In const void*, In std::size_t, In const StepRenderBuffers&) noexcept;
-		void (*destroy)(InOut void*) noexcept;
-};
-
 } // namespace matrix_core

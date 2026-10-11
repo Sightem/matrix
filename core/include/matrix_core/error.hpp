@@ -20,6 +20,7 @@ enum class ErrorCode : std::uint8_t {
 		DimensionMismatch,
 		NotSquare,
 		Singular,
+		NoSolution,
 		DivisionByZero,
 		Overflow,
 		BufferTooSmall,

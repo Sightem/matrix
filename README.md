@@ -1,4 +1,4 @@
-<h1 align="center">Step by Step Linear Algebra for the TI84+ CE</h1>
+<h1 align="center">Step by Step Linear Algebra for the TI84+ CE (83PCE in France)</h1>
 
 <p align="center">
   <img src="assets/animated.png" alt="Matrix page" />
@@ -6,7 +6,7 @@
   <img src="assets/operations.png" alt="Operations menu" />
 </p>
 
-A linear algebra program for the TI-84 Plus CE graphing calculator. **Matrix** automates the mechanical parts of linear algebra, such as computing determinants, row reductions, inverses, Cramer's rule, and more, while **showing every step** so you can follow along
+A linear algebra program for the TI-84 Plus CE (83PCE in France) graphing calculator. **Matrix** automates the mechanical parts of linear algebra, such as computing determinants, row reductions, inverses, Cramer's rule, and more, while **showing every step** so you can follow along
 
 Steps are rendered as typeset LaTeX directly, powered by the bundled [libtexce](https://github.com/Sightem/libtexce) rendering engine
 
@@ -25,7 +25,7 @@ Linear algebra courses require you to work through lengthy and repetitive calcul
 - Pick an operation from a menu and get the result instantly
 - Tap a key to page through **step by step LaTeX explanations** of the entire computation
 - **Exact rational arithmetic** results are displayed as fractions
-- Runs natively on your TI-84+ CE
+- Runs natively on your TI-84+ CE (83PCE)
 
 ## Features
 
@@ -75,7 +75,7 @@ Every operation generates a detailed explanation:
 
 ### Requirements
 
-- A **TI-84 Plus CE** or **TI-84 Plus CE Python Edition**
+- A **TI-84 Plus CE** (**83PCE** in France) or **TI-84 Plus CE Python Edition**
 - A USB cable and software to transfer files to the calculator [Ti connect CE](https://education.ti.com/en/products/computer-software/ti-connect-ce-sw) for windows and [webtilp](https://tiplanet.org/scripts/webtilibs/webtilp.html) for MacOS/Linux/Chromebooks
 
 ### Installation
@@ -84,7 +84,7 @@ Every operation generates a detailed explanation:
 2. Connect your calculator to your computer via USB
 3. Get clibs from https://tiny.cc/clibs
 4. If you are on an OS above version 5.4, you need [arTIfiCE](https://yvantt.github.io/arTIfiCE/) to launch the program (this is likely the case)
-3. Open TI Connect CE or webtilp and send `MATRIX.8xp` to your calculator, the fonts, and clibs and arTIfiCE (make sure to choose ARCHIVE when prompted)
+5. Open TI Connect CE or webtilp and send `MATRIX.8xp`, `TeXFonts.8xv`, `TeXScrpt.8xv`, clibs, and (if required) arTIfiCE to your calculator. Choose **ARCHIVE** when prompted. Use the font AppVars from the same release as Matrix; older fontlibc fonts are incompatible with the current libtexce renderer.
 
 ### Quick Start
 
@@ -123,6 +123,11 @@ Every operation generates a detailed explanation:
 - Steps are rendered one at a time using LaTeX. each page shows a caption and a typeset formula or matrix
 - The step counter (e.g., `3/7`) tells you where you are
 - For complex operations (Cramer's rule), a sub menu lets you view each sub computation
+
+### Bases and RREF Solutions
+
+- A zero-dimensional subspace displays **Empty basis (zero subspace)**
+- **Solve via RREF** displays `x = x_p + N t`. Use **left/right** to switch between the particular solution `x_p` and the null- pace basis `N`. **[2nd]** opens the reduction steps
 
 
 ## Contributing

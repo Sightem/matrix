@@ -4,102 +4,49 @@
 #include "matrix_core/row_ops.hpp"
 #include "matrix_core/row_reduction.hpp"
 
-#include <new>
-
 namespace matrix_core {
-namespace {
-
-struct EchelonCtx {
-		MatrixView input;
-		EchelonKind kind = EchelonKind::Rref;
-		std::size_t op_count = 0;
-};
-
-std::size_t echelon_step_count(const void* vctx) noexcept {
-		const auto* ctx = static_cast<const EchelonCtx*>(vctx);
-		return ctx->op_count + 1;
-}
-
-ErrorCode echelon_render_step(const void* vctx, std::size_t index, const StepRenderBuffers& out) noexcept {
-		const auto* ctx = static_cast<const EchelonCtx*>(vctx);
-		if (!ctx->input.data)
-				return ErrorCode::Internal;
-		if (!out.scratch)
-				return ErrorCode::Internal;
-
-		if (out.caption && out.caption_cap)
-				out.caption[0] = '\0';
-		if (out.latex && out.latex_cap)
-				out.latex[0] = '\0';
-
-		if (index == 0)
-				return latex::write_matrix_display(ctx->input, latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
-
+ErrorCode Explanation::render_echelon(std::size_t index, const StepRenderBuffers& out) const noexcept {
 		MatrixMutView work;
-		ErrorCode ec = matrix_clone(*out.scratch, ctx->input, &work);
+		ErrorCode ec = matrix_work_view(out.work, input.rows, input.cols, &work);
 		if (!is_ok(ec))
 				return ec;
-
+		if (index == 0)
+				return latex::write_matrix_display(input, latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
+		ec = matrix_copy(input, work);
+		if (!is_ok(ec))
+				return ec;
 		OpObserver obs;
-		obs.target = index; // stop after applying index ops
-		ec = echelon_apply(work, ctx->kind, &obs);
+		obs.target = index;
+		ec = echelon_apply(work, kind == Kind::Ref ? EchelonKind::Ref : EchelonKind::Rref, &obs);
 		if (!is_ok(ec))
 				return ec;
 		if (obs.count < index)
 				return ErrorCode::StepOutOfRange;
-
 		if (out.caption) {
 				ec = row_op_caption(obs.last_op, out.caption, out.caption_cap);
 				if (!is_ok(ec))
 						return ec;
 		}
-
 		return latex::write_matrix_display(work.view(), latex::MatrixBrackets::BMatrix, {out.latex, out.latex_cap});
 }
 
-constexpr ExplanationVTable kEchelonVTable = {
-        .step_count = &echelon_step_count,
-        .render_step = &echelon_render_step,
-        .destroy = nullptr,
-};
-
-} // namespace
-
-Error op_echelon(MatrixView a, EchelonKind kind, MatrixMutView out, Explanation* expl, const ExplainOptions& opts) noexcept {
-		Error err;
+Error op_echelon(MatrixView a, EchelonKind kind, MatrixMutView out, Explanation* expl) noexcept {
+		if (expl)
+				*expl = {};
 		if (out.rows != a.rows || out.cols != a.cols)
 				return {ErrorCode::DimensionMismatch, a.dim(), out.dim()};
-
 		ErrorCode ec = matrix_copy(a, out);
 		if (!is_ok(ec))
 				return {ec};
-
 		OpObserver obs;
-		obs.target = static_cast<std::size_t>(-1);
 		ec = echelon_apply(out, kind, &obs);
-		if (!is_ok(ec)) {
-				err.code = ec;
-				err.a = a.dim();
-				return err;
+		if (!is_ok(ec))
+				return {ec, a.dim()};
+		if (expl) {
+				expl->kind = kind == EchelonKind::Ref ? Explanation::Kind::Ref : Explanation::Kind::Rref;
+				expl->input = a;
+				expl->op_count = obs.count;
 		}
-
-		if (opts.enable) {
-				if (!opts.persist || !expl)
-						return {ErrorCode::Internal};
-
-				ArenaScope tx(*opts.persist);
-				void* mem = opts.persist->allocate(sizeof(EchelonCtx), alignof(EchelonCtx));
-				if (!mem)
-						return {ErrorCode::Overflow};
-				auto* ctx = new (mem) EchelonCtx{};
-				ctx->input = a;
-				ctx->kind = kind;
-				ctx->op_count = obs.count;
-				*expl = Explanation::make(ctx, &kEchelonVTable);
-				tx.commit();
-		}
-
-		return err;
+		return {};
 }
-
 } // namespace matrix_core

@@ -3,6 +3,10 @@
 #include <keypadc.h>
 
 namespace matrix_shell {
+namespace {
+constexpr std::uint16_t kInitialDelayFrames = 16;
+constexpr std::uint16_t kRepeatPeriodFrames = 3;
+}
 
 void Input::begin_frame() noexcept {
 		for (std::uint8_t i = 0; i < 8; i++)
@@ -14,38 +18,28 @@ void Input::begin_frame() noexcept {
 }
 
 bool Input::down(std::uint8_t group, std::uint8_t mask) const noexcept {
-		if (group >= 8)
-				return false;
 		return (cur_[group] & mask) != 0;
 }
 
 bool Input::pressed(std::uint8_t group, std::uint8_t mask) const noexcept {
-		if (group >= 8)
-				return false;
 		return (cur_[group] & mask) != 0 && (prev_[group] & mask) == 0;
 }
 
-bool Input::released(std::uint8_t group, std::uint8_t mask) const noexcept {
-		if (group >= 8)
-				return false;
-		return (cur_[group] & mask) == 0 && (prev_[group] & mask) != 0;
-}
-
-Input::RepeatState& Input::rep_state_for(std::uint8_t group, std::uint8_t mask) noexcept {
+Input::RepeatState& Input::rep_state_for(std::uint8_t mask) noexcept {
 		// Only arrows repeat.
-		if (group == 7 && mask == kb_Up)
+		if (mask == kb_Up)
 				return rep_up_;
-		if (group == 7 && mask == kb_Down)
+		if (mask == kb_Down)
 				return rep_down_;
-		if (group == 7 && mask == kb_Left)
+		if (mask == kb_Left)
 				return rep_left_;
 		return rep_right_;
 }
 
-bool Input::repeat(std::uint8_t group, std::uint8_t mask, RepeatConfig cfg) noexcept {
-		RepeatState& st = rep_state_for(group, mask);
+bool Input::repeat(std::uint8_t group, std::uint8_t mask) noexcept {
+		RepeatState& st = rep_state_for(mask);
 		const bool is_down = down(group, mask);
-		const bool was_down = (group < 8) ? ((prev_[group] & mask) != 0) : false;
+		const bool was_down = (prev_[group] & mask) != 0;
 
 		if (!is_down) {
 				st.held = false;
@@ -54,7 +48,7 @@ bool Input::repeat(std::uint8_t group, std::uint8_t mask, RepeatConfig cfg) noex
 		}
 
 		// initial press always counts
-		if (is_down && !was_down) {
+		if (!was_down) {
 				st.held = true;
 				st.frames = 0;
 				return true;
@@ -68,11 +62,11 @@ bool Input::repeat(std::uint8_t group, std::uint8_t mask, RepeatConfig cfg) noex
 		}
 
 		st.frames++;
-		if (st.frames < cfg.initial_delay_frames)
+		if (st.frames < kInitialDelayFrames)
 				return false;
 
-		const std::uint16_t after = static_cast<std::uint16_t>(st.frames - cfg.initial_delay_frames);
-		return (after % cfg.repeat_period_frames) == 0;
+		const std::uint16_t after = static_cast<std::uint16_t>(st.frames - kInitialDelayFrames);
+		return (after % kRepeatPeriodFrames) == 0;
 }
 
 } // namespace matrix_shell

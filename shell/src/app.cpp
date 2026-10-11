@@ -6,7 +6,6 @@
 #include "matrix_core/ops.hpp"
 #include "matrix_core/writer.hpp"
 
-#include <fontlibc.h>
 #include <graphx.h>
 #include <keypadc.h>
 
@@ -17,15 +16,10 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
-#include <utility>
 
 namespace matrix_shell {
 namespace {
-using detail::dbg_print_i64;
-using detail::dbg_print_matrix;
-using detail::dbg_print_rational;
 using detail::fail_fast;
-using detail::keep_cursor_in_view;
 using detail::kKbGroup1;
 using detail::kKbGroup3;
 using detail::kKbGroup4;
@@ -37,17 +31,9 @@ using detail::kScreenW;
 using detail::op_is_binary;
 using detail::op_name;
 
-constexpr std::size_t kSlabBytes = 18u * 1024u;
-constexpr std::size_t kPersistBytes = 9u * 1024u;
-constexpr std::size_t kScratchBytes = 9u * 1024u;
-
-static_assert(kPersistBytes + kScratchBytes == kSlabBytes);
-
 constexpr std::size_t kTeXRendererBytes = 20u * 1024u;
 
 void print_single_line_clipped(const char* text, int max_width_px) noexcept {
-		if (!text || max_width_px <= 0)
-				return;
 		int used_px = 0;
 		for (const char* p = text; *p != '\0'; ++p) {
 				const char c = *p;
@@ -64,34 +50,19 @@ void print_single_line_clipped(const char* text, int max_width_px) noexcept {
 } // namespace
 
 bool App::init() noexcept {
-		const matrix_core::ErrorCode ec = slab_.init(kSlabBytes);
-		if (!matrix_core::is_ok(ec))
-				return false;
-
-		persist_.reset(slab_.data(), kPersistBytes);
-		scratch_.reset(slab_.data() + kPersistBytes, kScratchBytes);
-		persist_base_mark_ = persist_.mark();
-		persist_tail_mark_ = persist_base_mark_;
-
 		depth_ = 0;
 		push_root();
 		msg_ = {};
 
-		SHELL_DBG("[init] slab=%uB persist=%uB scratch=%uB\n", (unsigned)kSlabBytes, (unsigned)kPersistBytes, (unsigned)kScratchBytes);
-		SHELL_DBG("[init] persist base=%p cap=%u\n", (void*)slab_.data(), (unsigned)persist_.capacity());
-		SHELL_DBG("[init] scratch base=%p cap=%u\n", (void*)(slab_.data() + kPersistBytes), (unsigned)scratch_.capacity());
-		SHELL_DBG("[init] persist_base_mark=%u\n", (unsigned)persist_base_mark_);
-
-		fontlib_font_t* f_main = fontlib_GetFontByIndex("TeXFonts", 0);
-		fontlib_font_t* f_script = fontlib_GetFontByIndex("TeXScrpt", 0);
-		if (!f_main || !f_script) {
-				SHELL_DBG("[tex] missing TeXFonts/TeXScrpt appvars\n");
+		tex_config_.palette[0] = ui::color::kWhite;
+		tex_config_.palette[1] = 254;
+		tex_config_.palette[2] = 253;
+		tex_config_.palette[3] = ui::color::kBlack;
+		if (!tex_font_open(&tex_config_.font_main, "TeXFonts") ||
+		        !tex_font_open(&tex_config_.font_script, "TeXScrpt")) {
+				SHELL_DBG("[tex] missing or invalid TeXFonts/TeXScrpt appvars\n");
 				return false;
 		}
-		tex_draw_set_fonts(f_main, f_script);
-		fontlib_SetForegroundColor(ui::color::kBlack);
-		fontlib_SetBackgroundColor(ui::color::kWhite);
-		fontlib_SetTransparency(true);
 
 		tex_renderer_ = tex_renderer_create_sized(kTeXRendererBytes);
 		if (!tex_renderer_) {
@@ -115,33 +86,21 @@ void App::push_root() noexcept {
 }
 
 Page& App::top() noexcept {
-		if (depth_ == 0)
-				fail_fast("top(): empty page stack");
 		return stack_[depth_ - 1];
 }
 
-const Page& App::top() const noexcept {
-		if (depth_ == 0)
-				fail_fast("top() const: empty page stack");
-		return stack_[depth_ - 1];
-}
 
-bool App::push(const Page& p) noexcept {
-		if (depth_ >= kMaxPageDepth)
-				return false;
+void App::push(const Page& p) noexcept {
+		static_assert(kMaxPageDepth >= 6);
 		stack_[depth_++] = p;
 		SHELL_DBG("[nav] push kind=%u depth=%u\n", (unsigned)p.kind, (unsigned)depth_);
 		if (p.kind == PageKind::Steps)
 				steps_tex_reset();
-		return true;
 }
 
-bool App::pop() noexcept {
-		if (depth_ <= 1)
-				return false;
+void App::pop() noexcept {
 		depth_--;
 		SHELL_DBG("[nav] pop depth=%u\n", (unsigned)depth_);
-		return true;
 }
 
 void App::show_message(const char* msg) noexcept {
@@ -149,73 +108,27 @@ void App::show_message(const char* msg) noexcept {
 		msg_.frames_left = 90;
 		msg_.text[0] = '\0';
 		matrix_core::CheckedWriter w{msg_.text, sizeof(msg_.text)};
-		w.append(msg ? msg : "");
+		w.append(msg);
 		SHELL_DBG("[msg] %s\n", msg_.text);
 }
 
 void App::update_message() noexcept {
 		if (!msg_.active)
 				return;
-		if (msg_.frames_left > 0)
-				msg_.frames_left--;
+		msg_.frames_left--;
 		if (msg_.frames_left == 0)
 				msg_.active = false;
 }
 
-matrix_core::ErrorCode App::ensure_slot_allocated(std::uint8_t slot) noexcept {
-		if (slot >= kSlotCount)
-				fail_fast("ensure_slot_allocated: slot out of range");
-		if (slots_[slot].allocated())
-				return matrix_core::ErrorCode::Ok;
-
-		persist_.rewind(persist_base_mark_);
-		persist_tail_mark_ = persist_base_mark_;
-		expl_ = {};
-		matrix_core::ArenaScope tx(persist_);
-
-		matrix_core::MatrixMutView backing;
-		const matrix_core::ErrorCode ec = matrix_core::matrix_alloc(persist_, 6, 6, &backing);
-		if (!matrix_core::is_ok(ec)) {
-				SHELL_DBG("[slot] alloc %c failed ec=%u used=%u/%u\n",
-				        (char)('A' + slot),
-				        (unsigned)ec,
-				        (unsigned)persist_.used(),
-				        (unsigned)persist_.capacity());
-				return ec;
-		}
-
-		slots_[slot].backing = backing;
-		slots_[slot].rows = 2;
-		slots_[slot].cols = 2;
-
-		persist_base_mark_ = persist_.mark();
-		persist_tail_mark_ = persist_base_mark_;
-		tx.commit();
-		SHELL_DBG("[slot] alloc %c backing=%p base_mark=%u used=%u/%u\n",
-		        (char)('A' + slot),
-		        (void*)backing.data,
-		        (unsigned)persist_base_mark_,
-		        (unsigned)persist_.used(),
-		        (unsigned)persist_.capacity());
-		return matrix_core::ErrorCode::Ok;
-}
 
 void App::clear_slot(std::uint8_t slot) noexcept {
-		if (slot >= kSlotCount)
-				fail_fast("clear_slot: slot out of range");
-		if (!slots_[slot].allocated())
-				fail_fast("clear_slot: slot not allocated");
 
-		matrix_core::matrix_fill_zero(slots_[slot].backing);
 		slots_[slot].rows = 0;
 		slots_[slot].cols = 0;
 		SHELL_DBG("[slot] cleared %c\n", (char)('A' + slot));
 }
 
 bool App::parse_i64(const char* s, std::int64_t* out) noexcept {
-		if (!out || !s || s[0] == '\0')
-				return false;
-
 		const char* const end = s + std::strlen(s);
 		char* parse_end = nullptr;
 		errno = 0;
@@ -266,11 +179,6 @@ bool App::step() noexcept {
 		case PageKind::Result:
 				update_result(p.u.result);
 				break;
-#if MATRIX_SHELL_ENABLE_PROJECTION && MATRIX_CORE_ENABLE_PROJECTION
-		case PageKind::ProjectionResult:
-				update_projection_result(p.u.proj);
-				break;
-#endif
 #if MATRIX_SHELL_ENABLE_CRAMER && MATRIX_CORE_ENABLE_CRAMER
 		case PageKind::CramerStepsMenu:
 				update_cramer_steps_menu(p.u.cramer_steps);
@@ -353,11 +261,6 @@ void App::render() noexcept {
 		case PageKind::Result:
 				render_result(p.u.result);
 				break;
-#if MATRIX_SHELL_ENABLE_PROJECTION && MATRIX_CORE_ENABLE_PROJECTION
-		case PageKind::ProjectionResult:
-				render_projection_result(p.u.proj);
-				break;
-#endif
 #if MATRIX_SHELL_ENABLE_CRAMER && MATRIX_CORE_ENABLE_CRAMER
 		case PageKind::CramerStepsMenu:
 				render_cramer_steps_menu(p.u.cramer_steps);

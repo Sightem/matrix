@@ -6,24 +6,23 @@ namespace matrix_core {
 Error op_det_replace_column(MatrixView a,
         MatrixView b,
         std::uint8_t col,
-        Arena& scratch,
+        MatrixMutView work,
         Rational* out,
-        Explanation* expl,
-        const ExplainOptions& opts) noexcept {
+        Explanation* expl) noexcept {
+		if (expl)
+				*expl = {};
 		(void)a;
 		(void)b;
 		(void)col;
-		(void)scratch;
+		(void)work;
 		(void)out;
-		(void)expl;
-		(void)opts;
 		return err_feature_disabled();
 }
 
-Error op_cramer_solve(MatrixView a, MatrixView b, Arena& scratch, MatrixMutView x_out) noexcept {
+Error op_cramer_solve(MatrixView a, MatrixView b, MatrixMutView work, MatrixMutView x_out) noexcept {
 		(void)a;
 		(void)b;
-		(void)scratch;
+		(void)work;
 		(void)x_out;
 		return err_feature_disabled();
 }
@@ -37,17 +36,16 @@ namespace matrix_core {
 Error op_cofactor_element(MatrixView a,
         std::uint8_t i,
         std::uint8_t j,
-        Arena& scratch,
+        MatrixMutView work,
         Rational* out,
-        Explanation* expl,
-        const ExplainOptions& opts) noexcept {
+        Explanation* expl) noexcept {
+		if (expl)
+				*expl = {};
 		(void)a;
 		(void)i;
 		(void)j;
-		(void)scratch;
+		(void)work;
 		(void)out;
-		(void)expl;
-		(void)opts;
 		return err_feature_disabled();
 }
 
@@ -57,9 +55,9 @@ Error op_cofactor_element(MatrixView a,
 #if !MATRIX_CORE_ENABLE_MINOR_MATRIX
 namespace matrix_core {
 
-Error op_minor_matrix(MatrixView a, Arena& scratch, MatrixMutView out) noexcept {
+Error op_minor_matrix(MatrixView a, MatrixMutView work, MatrixMutView out) noexcept {
 		(void)a;
-		(void)scratch;
+		(void)work;
 		(void)out;
 		return err_feature_disabled();
 }

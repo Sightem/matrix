@@ -19,4 +19,9 @@ struct Layout {
 		int margin_y = 6;
 };
 
+constexpr int kListLineHeight = 14;
+constexpr int kListVisible = (240 - Layout{}.header_h - Layout{}.footer_h - 2 * Layout{}.margin_y) / kListLineHeight;
+
+void list_row(std::uint8_t row, bool selected) noexcept;
+
 } // namespace matrix_shell::ui

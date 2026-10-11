@@ -28,19 +28,14 @@ constexpr std::uint8_t kKbGroup4 = 4;
 constexpr std::uint8_t kKbGroup5 = 5;
 
 [[noreturn]] void fail_fast(const char* msg) noexcept;
-[[noreturn]] void fail_fast(const char* func, const char* msg) noexcept;
-void require_impl(bool ok, const char* func, const char* msg) noexcept;
 
-std::uint8_t keep_cursor_in_view(std::uint8_t cursor, std::uint8_t scroll, std::uint8_t count, int visible) noexcept;
+void update_list(Input& input, std::uint8_t& cursor, std::uint8_t& scroll, std::uint8_t count) noexcept;
+void render_slot(std::uint8_t index, const Slot& slot) noexcept;
 
 bool op_is_binary(OperationId op) noexcept;
 bool op_enabled(OperationId op) noexcept;
 const char* op_name(OperationId op) noexcept;
 
 void dbg_print_i64(std::int64_t v) noexcept;
-void dbg_print_rational(matrix_core::Rational r) noexcept;
-void dbg_print_matrix(const char* tag, matrix_core::MatrixView m) noexcept;
 
 } // namespace matrix_shell::detail
-
-#define REQUIRE(ok, msg) ::matrix_shell::detail::require_impl((ok), __func__, (msg))

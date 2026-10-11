@@ -19,9 +19,6 @@ constexpr std::uint64_t gcd_u64(std::uint64_t a, std::uint64_t b) noexcept {
 }
 
 ErrorCode normalize(std::int64_t* num, std::int64_t* den) noexcept {
-		if (!num || !den)
-				return ErrorCode::Internal;
-
 		if (*den == 0)
 				return ErrorCode::DivisionByZero;
 
@@ -55,9 +52,6 @@ template <typename T> bool add_overflow(T a, T b, T* out) noexcept {
 		//
 		// __int128 is also not supported on the CE target
 		// TODO: revisit this with nightly toolchain
-		if (!out)
-				return true;
-
 		constexpr T kMax = std::numeric_limits<T>::max();
 		constexpr T kMin = std::numeric_limits<T>::min();
 
@@ -74,9 +68,6 @@ template <typename T> bool add_overflow(T a, T b, T* out) noexcept {
 }
 
 template <typename T> bool sub_overflow(T a, T b, T* out) noexcept {
-		if (!out)
-				return true;
-
 		constexpr T kMax = std::numeric_limits<T>::max();
 		constexpr T kMin = std::numeric_limits<T>::min();
 
@@ -93,9 +84,6 @@ template <typename T> bool sub_overflow(T a, T b, T* out) noexcept {
 }
 
 template <typename T> bool mul_overflow(T a, T b, T* out) noexcept {
-		if (!out)
-				return true;
-
 		constexpr T kMax = std::numeric_limits<T>::max();
 		constexpr T kMin = std::numeric_limits<T>::min();
 

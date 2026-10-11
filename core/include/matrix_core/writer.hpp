@@ -10,35 +10,51 @@
 
 namespace matrix_core {
 
-// string builder helper that writes to a fixed capacity buffer
-// all operations are noexcept and return ErrorCode on overflow
 struct Writer {
-		char* data = nullptr;
-		std::size_t cap = 0;
-		std::size_t len = 0;
+		char* data;
+		std::size_t cap;
+		std::size_t len;
 
-		ErrorCode put(char ch) noexcept {
-				if (!data || cap == 0)
-						return ErrorCode::BufferTooSmall;
-				if (len + 1 >= cap)
-						return ErrorCode::BufferTooSmall;
+		explicit Writer(char* buffer = nullptr, std::size_t capacity = 0, std::size_t initial_len = 0) noexcept
+		    : data(buffer), cap(capacity), len(initial_len) {
+				if (!data || cap == 0) {
+						error_ = ErrorCode::BufferTooSmall;
+						return;
+				}
+				if (len >= cap) {
+						len = cap - 1;
+						error_ = ErrorCode::BufferTooSmall;
+				}
+				data[len] = '\0';
+		}
+
+		ErrorCode status() const noexcept { return error_; }
+
+		void put(char ch) noexcept {
+				if (!is_ok(error_))
+						return;
+				if (len >= cap - 1) {
+						error_ = ErrorCode::BufferTooSmall;
+						return;
+				}
 				data[len++] = ch;
 				data[len] = '\0';
-				return ErrorCode::Ok;
 		}
 
-		ErrorCode append(const char* s) noexcept {
-				if (!s)
-						return ErrorCode::Internal;
-				for (std::size_t i = 0; s[i] != '\0'; i++) {
-						ErrorCode ec = put(s[i]);
-						if (!is_ok(ec))
-								return ec;
+		void append(const char* s) noexcept {
+				if (!is_ok(error_))
+						return;
+				if (!s) {
+						error_ = ErrorCode::Internal;
+						return;
 				}
-				return ErrorCode::Ok;
+				for (std::size_t i = 0; is_ok(error_) && s[i] != '\0'; i++)
+						put(s[i]);
 		}
 
-		ErrorCode append_u64(std::uint64_t v) noexcept {
+		void append_u64(std::uint64_t v) noexcept {
+				if (!is_ok(error_))
+						return;
 				char buf[32];
 				std::size_t n = 0;
 				do {
@@ -46,59 +62,76 @@ struct Writer {
 						v /= 10u;
 				} while (v != 0u);
 
-				for (std::size_t i = 0; i < n; i++) {
-						ErrorCode ec = put(buf[n - 1 - i]);
-						if (!is_ok(ec))
-								return ec;
-				}
-				return ErrorCode::Ok;
+				for (std::size_t i = 0; i < n && is_ok(error_); i++)
+						put(buf[n - 1 - i]);
 		}
 
-		ErrorCode append_i64(std::int64_t v) noexcept {
-				std::uint64_t mag = (v < 0) ? (static_cast<std::uint64_t>(-(v + 1)) + 1u) : static_cast<std::uint64_t>(v);
-				if (v < 0) {
-						ErrorCode ec = put('-');
-						if (!is_ok(ec))
-								return ec;
-				}
-				return append_u64(mag);
+		void append_i64(std::int64_t v) noexcept {
+				if (!is_ok(error_))
+						return;
+				if (v < 0)
+						put('-');
+				if (!is_ok(error_))
+						return;
+				const std::uint64_t mag =
+				        (v < 0) ? (static_cast<std::uint64_t>(-(v + 1)) + 1u) : static_cast<std::uint64_t>(v);
+				append_u64(mag);
 		}
 
 		// append a 1 based index (v+1) as decimal
-		ErrorCode append_index1(std::uint8_t v) noexcept { return append_u64(static_cast<std::uint64_t>(v) + 1u); }
+		void append_index1(std::uint8_t v) noexcept {
+				if (is_ok(error_))
+						append_u64(static_cast<std::uint64_t>(v) + 1u);
+		}
 
 		// append a rational as LaTeX (either integer or \frac{num}{den})
-		ErrorCode append_rational_latex(const Rational& r) noexcept {
-				if (r.den() == 1)
-						return append_i64(r.num());
-
-				ErrorCode ec = append("\\frac{");
-				if (!is_ok(ec))
-						return ec;
-				ec = append_i64(r.num());
-				if (!is_ok(ec))
-						return ec;
-				ec = append("}{");
-				if (!is_ok(ec))
-						return ec;
-				ec = append_i64(r.den());
-				if (!is_ok(ec))
-						return ec;
-				return append("}");
+		void append_rational_latex(const Rational& r) noexcept {
+				if (!is_ok(error_))
+						return;
+				if (r.den() == 1) {
+						append_i64(r.num());
+						return;
+				}
+				append("\\frac{");
+				append_i64(r.num());
+				append("}{");
+				append_i64(r.den());
+				append("}");
 		}
+
+	  private:
+		ErrorCode error_ = ErrorCode::Ok;
 };
 
 // Writer wrapper that fail-fast aborts on the first error.
 // Intended for cases where overflows indicate a programmer error.
 struct CheckedWriter final {
-		explicit CheckedWriter(char* data, std::size_t cap) noexcept : w{data, cap, 0} {}
+		explicit CheckedWriter(char* data, std::size_t cap) noexcept : w{data, cap, 0} { check(w.status()); }
 
-		void put(char ch) noexcept { check(w.put(ch)); }
-		void append(const char* s) noexcept { check(w.append(s)); }
-		void append_u64(std::uint64_t v) noexcept { check(w.append_u64(v)); }
-		void append_i64(std::int64_t v) noexcept { check(w.append_i64(v)); }
-		void append_index1(std::uint8_t v) noexcept { check(w.append_index1(v)); }
-		void append_rational_latex(const Rational& r) noexcept { check(w.append_rational_latex(r)); }
+		void put(char ch) noexcept {
+				w.put(ch);
+				check(w.status());
+		}
+		void append(const char* s) noexcept {
+				w.append(s);
+				check(w.status());
+		}
+		void append_u64(std::uint64_t v) noexcept {
+				w.append_u64(v);
+				check(w.status());
+		}
+		void append_i64(std::int64_t v) noexcept {
+				w.append_i64(v);
+				check(w.status());
+		}
+		void append_index1(std::uint8_t v) noexcept {
+				w.append_index1(v);
+				check(w.status());
+		}
+		void append_rational_latex(const Rational& r) noexcept {
+				w.append_rational_latex(r);
+				check(w.status());
+		}
 
 		Writer w{};
 

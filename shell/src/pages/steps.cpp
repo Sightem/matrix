@@ -14,27 +14,22 @@
 #include "tex/tex.h"
 #include "tex/tex_renderer.h"
 
-#include <utility>
 
 namespace matrix_shell {
 namespace {
 using detail::fail_fast;
-using detail::keep_cursor_in_view;
 using detail::kKbGroup1;
 using detail::kKbGroup6;
 using detail::kKbGroupArrows;
 using detail::kScreenH;
 using detail::kScreenW;
-using namespace matrix_shell::text_literals;
-
-static TeX_Config kTeXCfg{ui::color::kBlack, ui::color::kWhite, "TeXFonts", nullptr, nullptr};
 
 const char* footer_steps_no_scroll() noexcept {
-		return "footer.steps_no_scroll"_tx;
+		return tr(TextId::FooterStepsNoScroll);
 }
 
 const char* footer_steps_scroll() noexcept {
-		return "footer.steps_scroll"_tx;
+		return tr(TextId::FooterStepsScroll);
 }
 } // namespace
 
@@ -58,37 +53,18 @@ void App::steps_tex_release() noexcept {
 
 #if MATRIX_SHELL_ENABLE_CRAMER && MATRIX_CORE_ENABLE_CRAMER
 void App::render_cramer_steps_menu(const CramerStepsMenuState& s) noexcept {
-		const ui::Layout l = ui::Layout{};
-
-		render_header("steps.cramer_title"_tx);
-		render_footer_hint("footer.select_back"_tx);
+		render_header(tr(TextId::StepsCramerTitle));
+		render_footer_hint(tr(TextId::FooterSelectBack));
 
 		const std::uint8_t count = static_cast<std::uint8_t>(s.n + 1u);
 
-		const int list_top = l.header_h + l.margin_y;
-		const int line_h = 14;
-		const int visible = (kScreenH - l.header_h - l.footer_h - 2 * l.margin_y) / line_h;
-
-		for (std::uint8_t row = 0; row < visible; row++) {
+		for (std::uint8_t row = 0; row < ui::kListVisible && s.scroll + row < count; row++) {
 				const std::uint8_t idx = static_cast<std::uint8_t>(s.scroll + row);
-				if (idx >= count)
-						break;
-
-				const int y = list_top + row * line_h;
-				const bool selected = (idx == s.cursor);
-				if (selected) {
-						gfx_SetColor(ui::color::kBlue);
-						gfx_FillRectangle(0, y - 1, kScreenW, line_h);
-						gfx_SetTextFGColor(ui::color::kWhite);
-				} else {
-						gfx_SetTextFGColor(ui::color::kBlack);
-				}
-
-				gfx_SetTextXY(l.margin_x, y + 2);
+				ui::list_row(row, idx == s.cursor);
 				if (idx == 0) {
-						gfx_PrintString("steps.delta_det_a"_tx);
+						gfx_PrintString(tr(TextId::StepsDeltaDetA));
 				} else {
-						gfx_PrintString("steps.delta_label"_tx);
+						gfx_PrintString(tr(TextId::StepsDeltaLabel));
 						gfx_PrintChar('_');
 						fmt_buf_[0] = '\0';
 						matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
@@ -100,40 +76,25 @@ void App::render_cramer_steps_menu(const CramerStepsMenuState& s) noexcept {
 #else
 void App::render_cramer_steps_menu(const CramerStepsMenuState&) noexcept {
 		const ui::Layout l = ui::Layout{};
-		render_header("steps.cramer_title"_tx);
-		render_footer_hint("footer.clear_back"_tx);
+		render_header(tr(TextId::StepsCramerTitle));
+		render_footer_hint(tr(TextId::FooterClearBack));
 		gfx_SetTextFGColor(ui::color::kBlack);
 		gfx_SetTextXY(l.margin_x, l.header_h + 30);
-		gfx_PrintString("common.disabled_build"_tx);
+		gfx_PrintString(tr(TextId::CommonDisabledBuild));
 }
 #endif
 
 void App::render_steps(const StepsState& s) noexcept {
 		const ui::Layout l = ui::Layout{};
-		render_header("steps.title"_tx);
+		render_header(tr(TextId::StepsTitle));
 
-		if (!expl_.available()) {
-				gfx_SetTextFGColor(ui::color::kBlack);
-				gfx_SetTextXY(l.margin_x, l.header_h + 30);
-				gfx_PrintString("steps.none_available"_tx);
-				return;
-		}
 
-		const std::size_t n = expl_.step_count();
-		if (n == 0) {
-				gfx_SetTextFGColor(ui::color::kBlack);
-				gfx_SetTextXY(l.margin_x, l.header_h + 30);
-				gfx_PrintString("steps.none"_tx);
-				return;
-		}
-
-		if (static_cast<std::size_t>(s.index) >= n)
-				fail_fast("render_steps: step index out of range");
+		const std::size_t n = calculation_.explanation.step_count();
 		const std::size_t idx = static_cast<std::size_t>(s.index);
 
 		gfx_SetTextFGColor(ui::color::kBlack);
 		gfx_SetTextXY(l.margin_x, l.header_h + 4);
-		gfx_PrintString("steps.title"_tx);
+		gfx_PrintString(tr(TextId::StepsTitle));
 		gfx_PrintString(" ");
 		fmt_buf_[0] = '\0';
 		matrix_core::CheckedWriter w{fmt_buf_, sizeof(fmt_buf_)};
@@ -152,22 +113,21 @@ void App::render_steps(const StepsState& s) noexcept {
 				step_latex_[0] = '\0';
 
 				{
-						matrix_core::ArenaScratchScope scratch_tx(scratch_);
 						matrix_core::StepRenderBuffers out;
 						out.caption = step_caption_;
 						out.caption_cap = sizeof(step_caption_);
 						out.latex = step_latex_;
 						out.latex_cap = sizeof(step_latex_);
-						out.scratch = &scratch_;
+						out.work = work();
 
-						tex_cached_step_ec_ = expl_.render_step(idx, out);
+						tex_cached_step_ec_ = calculation_.explanation.render_step(idx, out);
 				}
 				SHELL_DBG("[steps] render idx=%u/%u ec=%u\n", (unsigned)idx, (unsigned)n, (unsigned)tex_cached_step_ec_);
 
 				if (!matrix_core::is_ok(tex_cached_step_ec_)) {
 						gfx_SetTextFGColor(ui::color::kBlack);
 						gfx_SetTextXY(l.margin_x, content_y);
-						gfx_PrintString("steps.render_failed"_tx);
+						gfx_PrintString(tr(TextId::StepsRenderFailed));
 						render_footer_hint(footer_steps_no_scroll());
 						return;
 				}
@@ -180,11 +140,11 @@ void App::render_steps(const StepsState& s) noexcept {
 				}
 				texw.append(step_latex_);
 
-				tex_layout_ = tex_format(tex_doc_, kScreenW - 2 * l.margin_x, &kTeXCfg);
+				tex_layout_ = tex_format(tex_doc_, kScreenW - 2 * l.margin_x, &tex_config_);
 				if (!tex_layout_) {
 						SHELL_DBG("[tex] tex_format failed\n");
 						gfx_SetTextXY(l.margin_x, content_y);
-						gfx_PrintString("steps.tex_failed"_tx);
+						gfx_PrintString(tr(TextId::StepsTeXFailed));
 						render_footer_hint(footer_steps_no_scroll());
 						return;
 				}
@@ -193,13 +153,6 @@ void App::render_steps(const StepsState& s) noexcept {
 				tex_scroll_y_ = 0;
 		}
 
-		if (!matrix_core::is_ok(tex_cached_step_ec_)) {
-				gfx_SetTextFGColor(ui::color::kBlack);
-				gfx_SetTextXY(l.margin_x, content_y);
-				gfx_PrintString("steps.render_failed"_tx);
-				render_footer_hint(footer_steps_no_scroll());
-				return;
-		}
 
 		if (tex_layout_ && tex_renderer_) {
 				// libtexce uses a fixed 240px viewport. render first, then redraw footer to
@@ -222,84 +175,48 @@ void App::render_steps(const StepsState& s) noexcept {
 #if MATRIX_SHELL_ENABLE_CRAMER && MATRIX_CORE_ENABLE_CRAMER
 void App::update_cramer_steps_menu(CramerStepsMenuState& s) noexcept {
 		if (input_.pressed(kKbGroup6, kb_Clear)) {
-				SHELL_DBG("[cramer] CLEAR back -> drop expl\n");
-				REQUIRE(pop(), "pop failed");
-				persist_.rewind(persist_tail_mark_);
-				expl_ = {};
+				SHELL_DBG("[cramer] CLEAR back\n");
+				pop();
 				return;
 		}
 
 		const std::uint8_t count = static_cast<std::uint8_t>(s.n + 1u);
 
-		const std::uint8_t old_cursor = s.cursor;
-		if (input_.repeat(kKbGroupArrows, kb_Up)) {
-				if (s.cursor > 0)
-						s.cursor--;
-		}
-		if (input_.repeat(kKbGroupArrows, kb_Down)) {
-				if (s.cursor + 1 < count)
-						s.cursor++;
-		}
-		if (s.cursor != old_cursor) {
-				const int line_h = 14;
-				const ui::Layout l = ui::Layout{};
-				const int visible = (kScreenH - l.header_h - l.footer_h - 2 * l.margin_y) / line_h;
-				s.scroll = keep_cursor_in_view(s.cursor, s.scroll, count, visible);
-		}
+		detail::update_list(input_, s.cursor, s.scroll, count);
 
 		if (!input_.pressed(kKbGroup6, kb_Enter))
 				return;
 
-		if (s.slot_a >= kSlotCount || s.slot_b >= kSlotCount)
-				fail_fast("update_cramer_steps_menu: slot out of range");
-		if (!slots_[s.slot_a].is_set() || !slots_[s.slot_b].is_set())
-				fail_fast("update_cramer_steps_menu: expected slots to be set");
 
 		const matrix_core::MatrixView a = slots_[s.slot_a].view_active();
 		const matrix_core::MatrixView b = slots_[s.slot_b].view_active();
 
-		// replace any previous Δ/Δ_i explanation but keep the result matrix
-		persist_.rewind(persist_tail_mark_);
-		expl_ = {};
-
-		matrix_core::ArenaScope tx(persist_);
-		matrix_core::ArenaScratchScope scratch_tx(scratch_);
-		matrix_core::ExplainOptions opts_steps;
-		opts_steps.enable = true;
-		opts_steps.persist = &persist_;
-
-		matrix_core::Explanation expl;
 		matrix_core::Rational v = matrix_core::Rational::from_int(0);
 		matrix_core::Error err{};
 
 		if (s.cursor == 0) {
 				SHELL_DBG("[cramer] run det(A)\n");
-				err = matrix_core::op_det(a, scratch_, &v, &expl, opts_steps);
+				err = matrix_core::op_det(a, work(), &v, &calculation_.explanation);
 		} else {
 				const std::uint8_t col = static_cast<std::uint8_t>(s.cursor - 1u);
 				SHELL_DBG("[cramer] run det_replace col=%u\n", (unsigned)col);
-				err = matrix_core::op_det_replace_column(a, b, col, scratch_, &v, &expl, opts_steps);
+				err = matrix_core::op_det_replace_column(a, b, col, work(), &v, &calculation_.explanation);
 		}
 
 		SHELL_DBG("[cramer] step err=%u\n", (unsigned)err.code);
-		if (!matrix_core::is_ok(err)) {
-				if (err.code == matrix_core::ErrorCode::NotSquare || err.code == matrix_core::ErrorCode::DimensionMismatch ||
-				        err.code == matrix_core::ErrorCode::IndexOutOfRange || err.code == matrix_core::ErrorCode::InvalidDimension ||
-				        err.code == matrix_core::ErrorCode::Internal) {
-						fail_fast("update_cramer_steps_menu: unexpected error");
-				}
-				show_message("common.error"_tx);
+		if (err.code == matrix_core::ErrorCode::NotSquare || err.code == matrix_core::ErrorCode::DimensionMismatch ||
+		        err.code == matrix_core::ErrorCode::IndexOutOfRange || err.code == matrix_core::ErrorCode::InvalidDimension ||
+		        err.code == matrix_core::ErrorCode::Internal)
+				fail_fast("update_cramer_steps_menu: unexpected error");
+		if (!operation_ok(OperationId::Cramer, err.code, s.slot_a, s.slot_b))
 				return;
-		}
 
-		tx.commit();
-		expl_ = std::move(expl);
-		REQUIRE(push(Page::make_steps()), "push steps failed");
+		push(Page::make_steps());
 }
 #else
 void App::update_cramer_steps_menu(CramerStepsMenuState& s) noexcept {
 		if (input_.pressed(kKbGroup6, kb_Clear)) {
-				REQUIRE(pop(), "pop failed");
+				pop();
 				return;
 		}
 		(void)s;
@@ -310,16 +227,12 @@ void App::update_steps(StepsState& s) noexcept {
 		if (input_.pressed(kKbGroup6, kb_Clear)) {
 				SHELL_DBG("[steps] CLEAR back\n");
 				steps_tex_release();
-				REQUIRE(pop(), "pop failed");
+				pop();
 				return;
 		}
 
-		if (!expl_.available())
-				return;
 
-		const std::size_t n = expl_.step_count();
-		if (n == 0)
-				return;
+		const std::size_t n = calculation_.explanation.step_count();
 
 		const bool jump = input_.down(kKbGroup1, kb_2nd);
 
