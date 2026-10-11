@@ -4,27 +4,35 @@
 
 Matrix is split into two layers:
 
-- **matrix_core**: a platform agnostic C++20 library that provides exact rational matrix arithmetic, 21 operations, and a type erased on demand explanation system. it has zero heap allocations during operation (everything runs on a preallocated arena). fully tested with native sanitizer builds (ASan, UBSan, LSan)
+- **matrix_core**: a platform-agnostic C++20 library providing exact rational matrix arithmetic and on-demand explanations. Callers supply matrix storage; the core does not allocate memory.
 
-- **matrix_shell**: the TI-84+ CE front end. A page stack state machine drives the UI using the CEs graphics library, keyboard library, and font library. LaTeX rendering is handled by the bundled **libtexce** engine
+- **matrix_shell**: the TI-84+ CE front end. A page stack state machine drives the UI using the CE's graphics and keyboard libraries. The bundled **libtexce** engine loads its Latin Modern font AppVars through `fileioc`; its font handles live with the application, and palette entries 253–254 are reserved for antialiasing.
 
 ### Memory Architecture
 
-The calculator has roughly **60 KB** of usable RAM and **4 KB** of stack space. Matrix's math engine uses an 18 KiB slab allocated once at startup split into two monotonic bump arenas:
+The calculator has roughly **60 KB** of usable RAM and **4 KB** of stack space. The static application owns fixed-capacity buffers with variable matrix shapes:
 
-| Arena | Size | Purpose |
-|---|---|---|
-| **persist** | 9 KiB | Long lived matrix slot storage + ephemeral explanation contexts |
-| **scratch** | 9 KiB | Temporary working memory, reset per-operation or per step render |
+| Storage | Rational cells | Bytes | Lifetime |
+|---|---:|---:|---|
+| Eight 6×6 slots | 288 | 4,608 | Application |
+| Current result: six-variable particular solution plus null-space basis | 42 | 672 | Current calculation |
+| Retained `[A|b]` or `Aᵀ` for explanation replay | 42 | 672 | Current calculation |
+| Reusable work buffer, large enough for 6×12 `[A|I]` | 72 | 1,152 | Overwritten by each operation or replay |
 
-There are **zero heap allocations** during normal operation — the single `malloc` happens at startup. This was verified with Valgrind/Massif profiling.
+The matrix buffers total **7,104 bytes**, plus inline explanation metadata and slot dimensions. They do not consume the calculator stack or require allocation, rollback, or arena marks. Cramer's result stays in the result buffer while its selected determinant explanation changes independently.
+
+The shell also owns a separate 20 KiB libtexce renderer and allocates a TeX layout when the displayed step changes; those renderer allocations are separate from the mathematical storage.
 
 ### Design Decisions
 
-- **View/handle pattern** for matrices: a `MatrixView` is just a pointer + dimensions (~24 bytes). Backing storage (`Rational[36]` = 576 bytes per slot) lives in the arena. Copying a matrix copies metadata, not data
+- **Matrix views**: a `MatrixView` is a pointer, dimensions, and stride. Output and work storage belong to the caller. `matrix_work_view` checks capacity and returns a narrowed view without clearing or allocating memory. Empty bases retain zero rows or columns and null data; inverse work can hold `[A | I]`.
 - **Exact Rational type**: 64 bit numerator and denominator, auto reduced to lowest terms. No floating point anywhere in the math pipeline
-- **On demand step generation**: explanation objects are type erased closures. the shell calls `render_step(i)` only when the user navigates to step *i*. only one steps LaTeX is in memory at a time
+- **On-demand step generation**: `Explanation` holds tagged metadata by value. Passing a null explanation pointer disables step metadata. Borrowed matrices must remain alive and unchanged; the RREF solver retains `[A|b]` separately from its results. `render_step(i)` reconstructs the requested step in `StepRenderBuffers::work`, so navigation does not retain matrix snapshots.
 - **Compile time feature flags**: optional operations (Cramer, cofactor, minor matrix, projection) can be toggled off to reduce binary size for the CE
+- **Core solving, typed results**: `op_solve_rref` returns the particular solution, null-space basis, and rank information separately. The shell's operation-tagged result union has named scalar, predicate, basis, solution, and projection payloads. Projection stores two matrix views and an exact rational coefficient in the common result page.
+- **Bounded formatting**: `Writer` retains its first error and stops writing; formatting callers inspect `status()` once. `CheckedWriter` uses the same implementation for shell buffers whose capacities are established by the UI contract.
+- **Shell flow**: operand selection feeds one operation switch, error presenter, and successful result transition. Menus share one entry type; menus, slot pickers, and the Cramer selector share list navigation and highlighting.
+- **Localization**: callers use `tr(TextId::...)`. `text_catalog.inc` supplies enum identifiers and English/French strings without a separate string-key language.
 
 
 ## Building from Source
@@ -36,6 +44,10 @@ There are **zero heap allocations** during normal operation — the single `mall
 - **Clang** for native builds
 - **[CE C/C++ Toolchain](https://ce-programming.github.io/toolchain/)** (for TI84 CE builds)
 
+The eZ80 compiler must include [the frame-index spill/add fix](https://github.com/CE-Programming/llvm-project/commit/b88a5b408f48). Earlier builds can reload deep stack slots from the wrong address and reset the calculator during operand selection; native tests cannot detect a target-code-generation bug.
+
+Calculator builds stay CMake-based and require the CEdev v17+ binutils pipeline. The older fasmg backend and its configuration have been removed.
+
 ### Native Build (for development and testing)
 
 ```bash
@@ -43,7 +55,7 @@ cmake --preset native
 cmake --build --preset native
 ```
 
-This builds the core library and all test executables with strict warnings (`-Werror`) enabled
+This builds `matrix_core` once as a static library and links the separate test executables and profiler against it. Strict warnings (`-Werror`) and test assertions remain enabled.
 
 ### TI84 CE Build (produces the .8xp program)
 
@@ -53,6 +65,8 @@ cmake --build --preset ce
 ```
 
 The output `MATRIX.8xp` is located in `build/ce/matrix_shell/bin/`.
+
+Set `CEDEV_ROOT` in the environment or pass `-DCEDEV_ROOT=/path/to/CEdev` when configuring if the toolchain is not installed at `~/CEdev`. Compiler/linker overrides use `CEDEV_C_COMPILER`, `CEDEV_CXX_COMPILER`, and `CEDEV_LINKER`; presets contain no workstation-specific paths.
 
 ### Sanitizer Builds
 
@@ -98,19 +112,20 @@ ctest --preset native
 
 ### Test Suites
 
+Tests keep representative numerical results and distinct failure mechanisms, rather than every branch or every sample. Shared errors, storage boundaries, and replay invariants are checked once where practical; renderer wording, internal null-guard probes, and duplicate examples are not coverage targets. The CE programs reuse the same test sources.
+
 | Test Suite | What It Covers |
 |---|---|
-| `test_rational` | Rational number arithmetic, reduction, edge cases |
-| `test_matrix_ops` | Add, subtract, multiply, transpose |
-| `test_det` | Determinant computation and step generation |
-| `test_rref` | REF and RREF with step verification |
-| `test_inverse` | Matrix inverse via Gauss-Jordan |
-| `test_cramer` | Cramer's rule solution and Δ/Δ\_i explanations |
-| `test_vectors` | Dot product, cross product, projection |
-| `test_cofactor_element` | Single cofactor/minor with step rendering |
-| `test_minor_matrix` | Full matrix of minors |
-| `test_spaces` | Column/row/null space basis extraction |
-| `test_arena_guards` | Arena allocator boundary checks |
+| `test_rational` | Sign normalization, fractional arithmetic, division by zero, and signed overflow |
+| `test_matrix_ops` | Arithmetic and transpose results, shape rejection, workspace stride/capacity, and bounded-writer truncation |
+| `test_det` | Singular determinant, pivot-swap sign, and square-input constraint |
+| `test_rref` | Distinct REF/RREF results and reproducible replay after workspace reuse |
+| `test_inverse` | Fractional inverse, singular rejection, and the 6×12 workspace boundary |
+| `test_cramer` | One system's solution and replacement determinants; inputs/results preserved during replay |
+| `test_vectors` | Mixed-orientation dot/cross products, projection components/norms, and zero-vector rejection |
+| `test_cofactor_element` | Cofactor sign, 1×1 definition, and index boundary |
+| `test_minor_matrix` | One complete matrix of minors and the minimum supported size |
+| `test_spaces` | Basis selection, empty bases, unique/dependent/inconsistent solves, and saved-input/result lifetimes |
 
 ### CE Target Tests
 
@@ -120,5 +135,3 @@ The core can also be compiled and run directly on [CEmu](github.com/CE-Programmi
 cmake --preset ce -DMATRIX_BUILD_CE_TESTS=ON
 cmake --build --preset ce
 ```
-
-These are somewhat scuffed, I have not bothered setting up autotests. you are reliant on the output you see on the emulator.
